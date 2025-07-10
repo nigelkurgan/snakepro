@@ -1,28 +1,38 @@
-############################################
-# 1️⃣ Load configuration and set workdir
-############################################
+# ---------------------------------------------------------------------
+# Load configuration and set workdir
+# ---------------------------------------------------------------------
 
-configfile: "config/config.yml"
 
-# Optionally set the working directory from config:
-workdir: config["project_root"]
+configfile: "config/config.yml"  # Loads parameters from config file :contentReference[oaicite:1]{index=1}
 
-# Extract key user options
+workdir: config["project_root"]  # Set working directory to project root
+
+# Pull key options from config
 TOOL   = config["quant_tool"].lower()
 RUN_QC = config.get("run_qc", True)
 
+# Read workflows and cohorts from config, or else infer from metadata
+WORKFLOWS = config.get("workflows", None)
+COHORTS   = config.get("cohorts", None)
 
-############################################
-# 2️⃣ Define the top-level default target
-############################################
+if TOOL == "diann" or TOOL == "spectronaut":
+    import pandas as pd
+    md = pd.read_csv("data_input/ms_raw_files.csv", sep=";")
+    md.columns = md.columns.str.strip()
+    if WORKFLOWS is None:
+        WORKFLOWS = sorted(md["workflow"].unique())
+    if COHORTS is None:
+        COHORTS = sorted(md["cohort"].unique())
+
+# ---------------------------------------------------------------------
+# Define top-level default targets
+# ---------------------------------------------------------------------
 
 def final_outputs():
     if TOOL == "diann":
-        return expand("data_output/{wf}/A_all_diann_complete.marker",
-                      wf=config["workflows"])
+        return expand("data_output/{wf}/A_all_diann_complete.marker", wf=WORKFLOWS)
     elif TOOL == "spectronaut":
-        return expand("data_output/{wf}/A_all_spectronaut_complete.marker",
-                      wf=config["workflows"])
+        return expand("data_output/S_all_spectronaut_complete.marker", wf=WORKFLOWS)
     else:
         raise ValueError(f"Unsupported quant_tool: {TOOL}")
 
@@ -30,10 +40,9 @@ rule all:
     input:
         final_outputs()
 
-
-############################################
-# 3️⃣ Conditionally include rule modules
-############################################
+# ---------------------------------------------------------------------
+# Include rule modules by tool and QC
+# ---------------------------------------------------------------------
 
 if TOOL == "diann":
     include: "rules/A_diann.smk"
@@ -42,12 +51,9 @@ elif TOOL == "spectronaut":
 else:
     raise ValueError(f"Unsupported quant_tool: {TOOL}")
 
-# If QC is requested, include QC rules
 if RUN_QC:
     include: "rules/B_QC.smk"
 
-# Only relevant for DIA-NN
-if TOOL == "diann":
+# Only run sample-removal branch if DIANN and exclude_samples is set
+if TOOL == "diann" and config.get("exclude_samples"):
     include: "rules/C_diann_remove.smk"
-
-
