@@ -5,61 +5,100 @@ __default__:
   mem: 8G
   partition: standardqueue
   output: 'slurmlogs/{rule}_$(date "+%Y-%m-%d_%H-%M-%S")_job%j.out.txt'
-  error: 'slurmlogs/{rule}_$(date "+%Y-%m-%d_%H-%M-%S")_job%j.err.txt'
+  error:  'slurmlogs/{rule}_$(date "+%Y-%m-%d_%H-%M-%S")_job%j.err.txt'
 
+# ---------------------------------------------------------------------
+# Spectral Library and File Conversion
+# ---------------------------------------------------------------------
 
 generate_spectral_library:
-  mem: 8GB
+  mem: 8G
   time: "3:00:00"
   cpus: 16
 
-convert_raw_files:
-  mem: 15GB
+convert_raw_files:  # for mzML
+  mem: 15G
   time: "24:00:00"
   cpus: 16
+
+convert_to_htrms:  # for Spectronaut
+  mem: 60G
+  time: "24:00:00"
+  cpus: 4
+
+# ---------------------------------------------------------------------
+# DIANN Quantificatoin
+# ---------------------------------------------------------------------
 
 run_diann_analysis:
-  mem: 20GB
+  mem: 20G
   time: "24:00:00"
   cpus: 16
 
-copy_converted_files:
-  mem: 20GB
+diann_analysis_workflows_removed:
+  mem: 20G
+  time: "24:00:00"
+  cpus: 16
+
+diann_analysis_cohorts_removed:
+  mem: 20G
   time: "24:00:00"
   cpus: 16
 
 A_all:
-  mem: 20GB
+  mem: 20G
   time: "80:00:00"
   cpus: 16
 
+A_quantify_all:
+  mem: 2G
+  time: "00:30:00"
+  cpus: 1
+
+# ---------------------------------------------------------------------
+# QC / AlphaStats
+# ---------------------------------------------------------------------
+
 run_alphastats_analysis:
-  mem: 8GB
+  mem: 8G
   time: "3:00:00"
   cpus: 16
 
-# New Spectronaut Rules
-convert_to_htrms:         # replaces old convert_raw_files
-  mem: 60G                # matches resources mem_mb=64000
-  time: "24:00:00"
-  cpus: 4
-
-spectronaut_workflow:     # 1 run / workflow
-  mem: 256G               # resources mem_mb=262144
-  time: "24:00:00"
+run_alphastats_analysis_workflow:
+  mem: 16G
+  time: "4:00:00"
   cpus: 16
 
-spectronaut_cohort:       # 1 run / workflow+cohort
+run_alphastats_analysis_cohort:
+  mem: 16G
+  time: "4:00:00"
+  cpus: 16
+
+summarize_qc:
+  mem: 4G
+  time: "1:00:00"
+  cpus: 4
+
+# ---------------------------------------------------------------------
+# Spectronaut Quantification
+# ---------------------------------------------------------------------
+
+spectronaut_workflow:
   mem: 256G
   time: "24:00:00"
   cpus: 16
 
-spectronaut_all:          # giant run across everything
+spectronaut_cohort:
+  mem: 256G
+  time: "24:00:00"
+  cpus: 16
+
+spectronaut_all:
   mem: 256G
   time: "48:00:00"
   cpus: 16
 
-S_all:                    # marker rule – tiny
+S_all:
   mem: 1G
   time: "00:10:00"
   cpus: 1

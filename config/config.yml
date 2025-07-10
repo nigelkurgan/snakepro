@@ -1,47 +1,33 @@
-# specify tool use
-quant_tool: diann          # or use "spectronaut" to switch quantifier
-run_qc: true               # controls whether QC rules are run
-sn_batch_correct: false    # Spectronaut-specific flag for batch correction
+# ---------------------------------------------------------------------
+# 0. Main options
+# ---------------------------------------------------------------------
+quant_tool: diann           # choose between "diann" or "spectronaut"
+run_qc: true                # whether to run QC rules
+sn_batch_correct: false    # Spectronaut-specific batch correction flag
 
+# ---------------------------------------------------------------------
+# 1. Paths & metadata
+# ---------------------------------------------------------------------
+project_root: "/path/to/pipeline/"            # absolute or relative
+metadata: "data_input/ms_raw_files.csv"       # metadata mapping raw files
+fasta_file: "data_input/uniprot_reference.fa" # FASTA used for library or QC
 
-# Path to the root directory of the pipeline
-project_root: '.../pipeline/'
+# ---------------------------------------------------------------------
+# 2. Quality Control settings
+# ---------------------------------------------------------------------
+filtering_option: all      # "all" or "group"
+group: null                # metadata group column name (if using group filtering)
+filtering_percentage: 0.20 # e.g., remove if >20% missing
+batch_column: "plate"      # metadata column name for batch grouping
+missing_values_grouping: "condition"
+pca_factors:
+  - "plate"
+  - "condition"
+  - "time"
+contamination_panel: true
+contamination_panel_file: "data_input/contamination_panel.xlsx"
+exclude_samples: []        # list of sample names to remove, e.g. ["s001", "s010"]
 
-# Path to the metadata CSV file 
-metadata: ".../pipeline/data_input/metadata_file.csv"
-
-# Path to the FASTA file containing the reference protein sequence database (used for spectral library generation)
-fasta_file: '.../pipeline/data_input/fasta_file'
-
-# Filtering settings for Quality Control
-# Options:
-#"all" (all samples),
-#"group" (at least one group)
-filtering_option: all
-# Specify group for filtering when using filtering_option: group
-group: None
-
-#Filtering percentage - default 20%
-filtering_percentage: 0.20
-
-batch_column: "plate"
-
-# Metadata column for grouping in missing value analysis
-missing_values_grouping: 'condition'
-
-# Metadata columns used for PCA visualization
-pca_factors: ["plate", "condition", "time"]
-
-# Enable or disable the contamination panel analysis (True or False)
-contamination_panel: True
-
-# Path to the contamination panel Excel file
-contamination_panel_file: "/.../pipeline/data_input/contamination_panel.xlsx"
-
-#Indicate the samples to exclude, in the format of a list ["sxxx", "sxxx"]
-exclude_samples: []
-
-# Batch correction settings
-batch_correction: False
-# Metadata column indicating the batch factor
+batch_correction: false
 batch_effect_column: "plate"
+

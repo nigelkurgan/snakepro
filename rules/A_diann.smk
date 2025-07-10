@@ -1,144 +1,173 @@
+# ---------------------------------------------------------------------
+# DIANN pipeline rules
+# ---------------------------------------------------------------------
+
+conda: "envs/proteomics-diann.yml"
+
 import pandas as pd
+from pathlib import Path
+import glob, sys
 
-directory_root = config["project_root"]
-print()
-
-# --- Data Preparation ---
-
-# Load file mapping raw files to workflows and cohorts
-metadata = pd.read_csv(f"{directory_root}data_input/ms_raw_files.csv", delimiter=";")
+# ---------------------------------------------------------------------
+# 1. Load metadata & Define global wildcard lists
+# ---------------------------------------------------------------------
+metadata = pd.read_csv(f"{config['project_root']}data_input/ms_raw_files.csv", sep=";")
 metadata.columns = metadata.columns.str.strip()
+if not {"file_name", "workflow", "cohort"}.issubset(metadata.columns):
+    sys.exit("[metadata error] Missing required columns in ms_raw_files.csv")
 
-# Remove '.raw' from raw file names
-metadata['file_name'] = metadata['file_name'].str.replace('.raw', '', regex=False)
+metadata["file_base"] = metadata["file_name"].str.replace(r"\.raw$", "", regex=True)
 
-# List of unique workflows and cohorts (if needed)
-workflows = metadata["workflow"].unique()
-cohorts = sorted(metadata["cohort"].unique())
+WORKFLOWS = sorted(metadata["workflow"].unique())
+COHORTS   = sorted(metadata["cohort"].unique())
+SAMPLES   = sorted(metadata["file_base"].unique())
 
-# --- Rules ---
-
-# Rule: Generate Predicted Spectral Library
+# ---------------------------------------------------------------------
+# 2. Generate predicted spectral library
+# ---------------------------------------------------------------------
 rule generate_spectral_library:
     input:
-        fasta = f"{directory_root}data_input/uniprotkb_reviewed_true_AND_model_organ_2025_02_10.fasta"
+        fasta = f"{config['project_root']}data_input/uniprotkb_reviewed_true_AND_model_organ_2025_02_10.fasta"
     output:
-        library = f"{directory_root}data_output/library.predicted.speclib"
+        library = f"{config['project_root']}data_output/library.predicted.speclib"
     threads: 16
     shell:
         """
-        source /projects/cbmr_shared/apps/modules/activate.sh
-        module load --auto diann/2.0.1
-        module load gcc/13.2.0
-        diann --fasta {input.fasta} \
-              --predictor \
-              --fasta-search \
-              --gen-spec-lib \
-              --out-lib {output.library} \
-              --threads {threads}
+        module load diann/2.0.1 gcc
+        diann \
+          --fasta {input.fasta} \
+          --predictor \
+          --fasta-search \
+          --gen-spec-lib \
+          --out-lib {output.library} \
+          --threads {threads}
         """
 
-# Rule: Convert Raw Files to mzML
-rule convert_raw_files:
+# ---------------------------------------------------------------------
+# 3. Convert raw files → mzML
+# ---------------------------------------------------------------------
+rule convert_raw_to_mzml:
     input:
-        raw = f"{directory_root}data_input/raw_files/{{sample}}.raw"
+        raw=lambda wc: (
+            f"{config['project_root']}data_input/raw_files/" +
+            metadata.loc[
+                (metadata.file_base == wc.sample) &
+                (metadata.workflow == wc.workflow) &
+                (metadata.cohort == wc.cohort),
+                "file_name"
+            ].iloc[0]
+        )
     output:
-        mzml = f"{directory_root}data_input/converted_files/{{workflow}}/{{cohort}}/{{sample}}.mzML"
-    params:
-        workflow = lambda wc: metadata[metadata["file_name"] == wc.sample]["workflow"].values[0],
-        cohort = lambda wc: metadata[metadata["file_name"] == wc.sample]["cohort"].values[0],
-        outdir = lambda wc: f"{directory_root}data_input/converted_files/{metadata[metadata['file_name'] == wc.sample]['workflow'].values[0]}/{metadata[metadata['file_name'] == wc.sample]['cohort'].values[0]}"
+        mzml = (
+            f"{config['project_root']}data_input/converted_files/" +
+            "{workflow}/{cohort}/{sample}.mzML"
+        )
     threads: 16
     resources:
-        mem_mb = 262144,
-        slurm_partition = "standardqueue"
+        mem_mb = 262144
     shell:
         """
-        mkdir -p {params.outdir}
-        source /projects/cbmr_shared/apps/modules/activate.sh
-        module load --auto msconvert/20250218_1
-        msconvert --64 --zlib --filter "peakPicking" --filter "zeroSamples removeExtra 1-" --outdir {params.outdir} {input.raw}
+        mkdir -p $(dirname {output.mzml})
+        module load msconvert/20250218_1
+        msconvert \
+          --64 \
+          --zlib \
+          --filter "peakPicking" \
+          --filter "zeroSamples removeExtra 1-" \
+          --outdir $(dirname {output.mzml}) \
+          {input.raw}
         """
 
+# ---------------------------------------------------------------------
+# 4. Marker rule — ensure all mzML conversion is complete
+# ---------------------------------------------------------------------
 rule convert_all:
     input:
-        [f"{directory_root}data_input/converted_files/{row['workflow']}/{row['cohort']}/{row['file_name']}.mzML"
-         for idx, row in metadata.iterrows()]
+        expand(
+            f"{config['project_root']}data_input/converted_files/{{workflow}}/{{cohort}}/{{sample}}.mzML",
+            workflow=WORKFLOWS,
+            cohort=COHORTS,
+            sample=SAMPLES
+        )
     output:
-        marker = f"{directory_root}data_output/A_all_converted.marker"
+        marker = f"{config['project_root']}data_output/A_all_converted.marker"
     shell:
         "touch {output.marker}"
 
-
-# Rule: DIANN Analysis for Entire Workflows
-# This runs DIANN on all converted files for a workflow, regardless of cohort (using --dir-all).
+# ---------------------------------------------------------------------
+# 5. DIANN analysis per workflow (all cohorts pooled)
+# ---------------------------------------------------------------------
 rule diann_analysis_workflows:
     input:
-        library = f"{directory_root}data_output/library.predicted.predicted.speclib",
-        raw_data_dir = f"{directory_root}data_input/converted_files/{{workflow}}"
+        library = f"{config['project_root']}data_output/library.predicted.speclib",
+        raw_data_dir = lambda wc: f"{config['project_root']}data_input/converted_files/{wc.workflow}"
     output:
-        results = f"{directory_root}data_output/{{workflow}}/{{workflow}}.stats.tsv"
+        stats = f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv"
     threads: 16
     resources:
-        mem_mb = 262144,
-        slurm_partition = "standardqueue"
+        mem_mb = 262144
     shell:
         """
-        mkdir -p {directory_root}data_output/{wildcards.workflow}
-        source /projects/cbmr_shared/apps/modules/activate.sh
-        module load --auto diann/2.0.1
-        module load gcc/13.2.0
-        diann --lib {input.library} \
-              --dir-all {input.raw_data_dir} \
-              --threads {threads} \
-              --out {directory_root}data_output/{wildcards.workflow}/{wildcards.workflow} \
-              --qvalue 0.01 \
-              --matrix-qvalue 0.01 \
-              --mass-acc-ms1 10 \
-              --mass-acc 10 \
-              --matrices \
-              --missed-cleavages 1
+        mkdir -p {config['project_root']}data_output/{wildcards.workflow}
+        module load diann/2.0.1 gcc
+        diann \
+          --lib {input.library} \
+          --dir-all {input.raw_data_dir} \
+          --threads {threads} \
+          --out {output.stats} \
+          --qvalue 0.01 \
+          --matrix-qvalue 0.01 \
+          --mass-acc-ms1 10 \
+          --mass-acc 10 \
+          --matrices \
+          --missed-cleavages 1
         """
 
-# Rule: DIANN Analysis for Each Cohort Separately
-# This runs DIANN on each workflow/cohort folder individually.
-
+# ---------------------------------------------------------------------
+# 6. DIANN analysis per workflow + cohort
+# ---------------------------------------------------------------------
 rule diann_analysis_cohorts:
     input:
-        library = f"{directory_root}data_output/library.predicted.predicted.speclib",
-        raw_data_dir = f"{directory_root}data_input/converted_files/{{workflow}}/{{cohort}}"
+        library = f"{config['project_root']}data_output/library.predicted.speclib",
+        raw_data_dir = lambda wc: (
+            f"{config['project_root']}data_input/converted_files/{wc.workflow}/{wc.cohort}"
+        )
     output:
-        results = f"{directory_root}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv"
+        stats = f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv"
     threads: 16
     resources:
-        mem_mb = 262144,
-        slurm_partition = "standardqueue"
+        mem_mb = 262144
     shell:
         """
-        mkdir -p {directory_root}data_output/{wildcards.workflow}_{wildcards.cohort}
-        source /projects/cbmr_shared/apps/modules/activate.sh
-        module load --auto diann/2.0.1
-        module load gcc/13.2.0
-        diann --lib {input.library} \
-              --dir {input.raw_data_dir} \
-              --threads {threads} \
-              --out {directory_root}data_output/{wildcards.workflow}_{wildcards.cohort}/{wildcards.workflow}_{wildcards.cohort} \
-              --qvalue 0.01 \
-              --matrix-qvalue 0.01 \
-              --mass-acc-ms1 10 \
-              --mass-acc 10 \
-              --matrices \
-              --missed-cleavages 1
+        mkdir -p {config['project_root']}data_output/{wildcards.workflow}_{wildcards.cohort}
+        module load diann/2.0.1 gcc
+        diann \
+          --lib {input.library} \
+          --dir {input.raw_data_dir} \
+          --threads {threads} \
+          --out {output.stats} \
+          --qvalue 0.01 \
+          --matrix-qvalue 0.01 \
+          --mass-acc-ms1 10 \
+          --mass-acc 10 \
+          --matrices \
+          --missed-cleavages 1
         """
 
+# ---------------------------------------------------------------------
+# 7. Final marker — all DIANN results complete
+# ---------------------------------------------------------------------
 rule A_all:
     input:
-        # Workflow-level DIANN results
-        expand(f"{directory_root}data_output/{{workflow}}/{{workflow}}.stats.tsv", workflow=workflows),
-        # Cohort-level DIANN results: for each row in metadata, construct a target path for that workflow/cohort
-        expand(f"{directory_root}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
-               workflow=workflows, cohort=sorted(metadata["cohort"].unique()))
+        expand(
+            f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv",
+            workflow=WORKFLOWS
+        ),
+        expand(
+            f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
+            workflow=WORKFLOWS, cohort=COHORTS
+        )
     output:
-        marker = f"{directory_root}data_output/A_all_diann_complete.marker"
+        marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
     shell:
         "touch {output.marker}"
