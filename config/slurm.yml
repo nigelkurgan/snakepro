@@ -1,0 +1,65 @@
+__default__:
+  time: "1:00:00"
+  job-name: '{rule}'
+  cpus: 1
+  mem: 8G
+  partition: standardqueue
+  output: 'slurmlogs/{rule}_$(date "+%Y-%m-%d_%H-%M-%S")_job%j.out.txt'
+  error: 'slurmlogs/{rule}_$(date "+%Y-%m-%d_%H-%M-%S")_job%j.err.txt'
+
+
+generate_spectral_library:
+  mem: 8GB
+  time: "3:00:00"
+  cpus: 16
+
+convert_raw_files:
+  mem: 15GB
+  time: "24:00:00"
+  cpus: 16
+
+run_diann_analysis:
+  mem: 20GB
+  time: "24:00:00"
+  cpus: 16
+
+copy_converted_files:
+  mem: 20GB
+  time: "24:00:00"
+  cpus: 16
+
+A_all:
+  mem: 20GB
+  time: "80:00:00"
+  cpus: 16
+
+run_alphastats_analysis:
+  mem: 8GB
+  time: "3:00:00"
+  cpus: 16
+
+# New Spectronaut Rules
+convert_to_htrms:         # replaces old convert_raw_files
+  mem: 60G                # matches resources mem_mb=64000
+  time: "24:00:00"
+  cpus: 4
+
+spectronaut_workflow:     # 1 run / workflow
+  mem: 256G               # resources mem_mb=262144
+  time: "24:00:00"
+  cpus: 16
+
+spectronaut_cohort:       # 1 run / workflow+cohort
+  mem: 256G
+  time: "24:00:00"
+  cpus: 16
+
+spectronaut_all:          # giant run across everything
+  mem: 256G
+  time: "48:00:00"
+  cpus: 16
+
+S_all:                    # marker rule – tiny
+  mem: 1G
+  time: "00:10:00"
+  cpus: 1

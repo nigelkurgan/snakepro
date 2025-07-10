@@ -1,0 +1,28 @@
+name: proteomics-spectronaut
+
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.9
+  - spectronaut=20.0.250602.92449   # Spectronaut CLI
+  - gcc                             # For any compiled dependencies
+  - alphastats                      # QC tools
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - hdf5                            # Recommended by AlphaStats for data handling :contentReference[oaicite:1]{index=1}
+  - pyyaml                          # Useful for YAML handling
+  - pip
+  - pip:
+      - alphastats                  # Ensure `pip install alphastats` is available
+
+# Optional but beneficial extras:
+#  - pip:
+#      - venn
+#      - adjustText
+#      - snakemake
+

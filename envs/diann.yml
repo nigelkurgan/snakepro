@@ -1,0 +1,17 @@
+name: proteomics-diann
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.9
+  - diann=2.0.1
+  - gcc
+  - alphastats
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - pip
+  - pip:
+        - alphastats

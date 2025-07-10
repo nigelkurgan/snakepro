@@ -1,0 +1,29 @@
+
+This is a step by step tutorial to use the pipeline in Esrum HPC.
+
+## Log in
+
+```bash
+ssh wqs176@esrumhead01fl.unicph.domain
+```
+
+## Commands to get to a directory
+
+```bash
+cd {directory}
+```
+```bash
+cd ../../projects/cbmr_fpm_soup-AUDIT/
+```
+
+## Command to go back in directories:
+
+One folder back: cd ../ 
+Two folder back: cd ../../
+
+## Command to create a new folder
+
+```bash
+mkdir {folder_name}
+```
+
