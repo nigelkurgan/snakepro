@@ -3,8 +3,7 @@
 # ---------------------------------------------------------------------
 quant_tool: diann           # choose between "diann" or "spectronaut"
 run_qc: true                # whether to run QC rules
-sn_batch_correct: false    # Spectronaut-specific batch correction flag
-
+batch_correction: false     # only set up for diann right now
 # ---------------------------------------------------------------------
 # 1. Paths & metadata
 # ---------------------------------------------------------------------
@@ -28,6 +27,6 @@ contamination_panel: true
 contamination_panel_file: "data_input/contamination_panel.xlsx"
 exclude_samples: []        # list of sample names to remove, e.g. ["s001", "s010"]
 
-batch_correction: false
+# adjust batch effect column here: ensure this is in metadata file 
 batch_effect_column: "plate"
 

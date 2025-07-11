@@ -9,7 +9,7 @@ This **Snakemake** pipeline allows proteomics researchers to **quantify large-co
 Clone the repository into your server's directory:
 
 ```bash
-git clone --recursive https://github.com/mafaldacustodio/Proteomics-QC-Pipeline.git
+git clone --recursive https://github.com/nigelkuran/snakepro.git
 ```
 
 After cloning, configure your pipeline by editing the configuration file.
@@ -21,45 +21,28 @@ After cloning, configure your pipeline by editing the configuration file.
 Edit the **config.yml** file with the appropriate paths and options:
 
 ```yaml
-# Path to the root directory of the pipeline
-project_root: '.../pipeline/'
+# Tool selection
+quant_tool: diann          # "diann" or "spectronaut"
+run_qc: true               # enable QC report generation
+sn_batch_correct: false    # Spectronaut-specific flag
 
-# Path to the metadata CSV file 
-metadata: ".../pipeline/data_input/metadata_file.csv"
+# Paths
+project_root: '/path/to/pipeline/'
+metadata: 'data_input/ms_raw_files.csv'
+fasta_file: 'data_input/uniprot_reference.fa'
 
-# Path to the FASTA file containing the reference protein sequence database (used for spectral library generation)
-fasta_file: '.../pipeline/data_input/fasta_file'
-
-# Filtering settings for Quality Control
-# Options:
-#"all" (all samples),
-#"group" (at least one group)
-filtering_option: all
-# Specify group for filtering when using filtering_option: group
-group: None
-
-#Filtering percentage - default 20%
+# QC settings
+filtering_option: all       # "all" or "group"
+group: null                 # required if filtering_option: group
 filtering_percentage: 0.20
-
-# Metadata column for grouping in missing value analysis
 missing_values_grouping: 'condition'
-
-# Metadata columns used for PCA visualization
 pca_factors: ["plate", "condition", "time"]
-
-# Enable or disable the contamination panel analysis (True or False)
-contamination_panel: True
-
-# Path to the contamination panel Excel file
-contamination_panel_file: "/.../pipeline/data_input/contamination_panel.xlsx"
-
-#Indicate the samples to exclude, in the format of a list ["sxxx", "sxxx"]
-exclude_samples: []
-
-# Batch correction settings
-batch_correction: False
-# Metadata column indicating the batch factor
+contamination_panel: true
+contamination_panel_file: 'data_input/contamination_panel.xlsx'
+exclude_samples: []         # e.g. ["sample_001", "sample_042"]
+batch_correction: false
 batch_effect_column: "plate"
+
 ```
 
 ### Add files
@@ -72,14 +55,12 @@ Place the following files in the specified directories:
   ```
 Use the following command:  
   ```bash
-  scp -r {directory}/raw wqs176@esrumhead01fl.unicph.domain:/projects/cbmr_fpm_soup-AUDIT/data/pipeline/data_input/raw/
+  scp -r {directory}/raw user@headnodefl.uni.domain:/project//data/pipeline/data_input/raw/
   ```
 - **FASTA file and metadata**
   ```bash
   pipeline/data_input/
   ```
-
-
 
 ---
 
@@ -92,13 +73,19 @@ tmux
 To run the full workflow and generate a QC report, execute:
 
 ```bash
-bash run_slurm.sh convert_all
-bash run_slurm.sh A_all
-bash run_slurm.sh summarize_qc
+bash run_slurm.sh all
 ```
-This will perform quantification, generate QC plots, and output a full PDF report.
+This will perform quantification, generate QC plots, and output a full PDF report
 
 ---
+
+Alternatively, you can invoke components manually:
+
+```bash
+bash run_slurm.sh convert_all            # data conversion
+bash run_slurm.sh A_all                  # full quantification (DIANN or Spectronaut)
+bash run_slurm.sh summarize_qc           # individual and summary QC reports
+```
 
 ### Post-Quality Control
 
@@ -230,7 +217,4 @@ If no corrections or removals are needed, the workflow is finalized.
 
 **Outlier table**
    - An overview table of potential outliers and the different analysis they are highlighted
-
-
-## Limitations
 
