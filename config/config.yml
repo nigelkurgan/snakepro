@@ -22,7 +22,7 @@ missing_values_grouping: "condition"
 pca_factors:
   - "plate"
   - "condition"
-  - "time"
+  - "time" # add more if you have in your metadata file or change to fit your needs
 contamination_panel: true
 contamination_panel_file: "data_input/contamination_panel.xlsx"
 exclude_samples: []        # list of sample names to remove, e.g. ["s001", "s010"]

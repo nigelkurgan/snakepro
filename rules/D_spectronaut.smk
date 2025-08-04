@@ -1,32 +1,30 @@
-# Spectronaut pipeline
-conda: "envs/proteomics-spectronaut.yml"
+# ---------------------------------------------------------------------
+# DIANN pipeline rules
+# ---------------------------------------------------------------------
+
+conda: "envs/proteomics-diann.yml"
 
 import pandas as pd
 from pathlib import Path
 import glob, sys
+import os
 
 # ---------------------------------------------------------------------
-# 1. Load and validate metadata
+# 0. Load metadata & Define global wildcard lists
 # ---------------------------------------------------------------------
-metadata = pd.read_csv("data_input/ms_raw_files.csv", sep=";")
+metadata = pd.read_csv(f"{config['project_root']}data_input/ms_raw_files.csv", sep=";")
 metadata.columns = metadata.columns.str.strip()
-required = {"file_name", "workflow", "cohort"}
-if not required.issubset(metadata.columns):
-    sys.exit(f"[metadata error] Missing columns: {required}")
+if not {"file_name", "workflow", "cohort"}.issubset(metadata.columns):
+    sys.exit("[metadata error] Missing required columns in ms_raw_files.csv")
 
-# Split into base name and extension
-metadata[["file_base", "ext"]] = metadata["file_name"].str.rsplit(".", 1, expand=True)
+metadata["file_base"] = metadata["file_name"].apply(lambda f: os.path.splitext(f)[0])
 
-# ---------------------------------------------------------------------
-# 2. Define global lists for workflows and cohorts
-# ---------------------------------------------------------------------
 WORKFLOWS = sorted(metadata["workflow"].unique())
-COHORTS = sorted(metadata["cohort"].unique())
-SAMPLES = sorted(metadata["file_base"].unique())
-EXTS = sorted(metadata["ext"].unique())
+COHORTS   = sorted(metadata["cohort"].unique())
+SAMPLES   = sorted(metadata["file_base"].unique())
 
 # ---------------------------------------------------------------------
-# 3. Locate FASTA file
+# 2. Locate FASTA file
 # ---------------------------------------------------------------------
 fasta_files = glob.glob("data_input/*.fa*")
 if len(fasta_files) != 1:
@@ -34,125 +32,167 @@ if len(fasta_files) != 1:
 FASTA = Path(fasta_files[0]).name  # used in shell commands
 
 # ---------------------------------------------------------------------
-# 4. Convert raw → .htrms
+# 2. Generate predicted spectral library
 # ---------------------------------------------------------------------
-rule convert_to_htrms:
+rule generate_spectral_library:
     input:
-        raw=lambda wc: metadata.loc[
-            (metadata.file_base == wc.sample) &
-            (metadata.workflow == wc.workflow) &
-            (metadata.cohort == wc.cohort),
-            "file_name"
-        ].iloc[0]
+        fasta=lambda wc: FASTA,
     output:
-        htrms="data_input/converted_files/{workflow}/{cohort}/{sample}.htrms"
-    threads: 4
-    resources:
-        mem_mb=64000
+        library = f"{config['project_root']}data_output/library.predicted.speclib"
+    threads: 16
+    log:
+        f"{config['project_root']}logs/step2/generate_spectral_library.log"
     shell:
-        r"""
-        mkdir -p data_input/converted_files/{wildcards.workflow}/{wildcards.cohort}
-        module load --auto spectronaut/20.0.250602.92449
-        spectronaut -convert \
-            -i {input.raw} \
-            -o {output.htrms} \
-            -nogui
+        """
+        module load diann/2.0.1 gcc
+        diann \
+          --fasta {input.fasta} \
+          --predictor \
+          --fasta-search \
+          --gen-spec-lib \
+          --out-lib {output.library} \
+          --threads {threads} \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
-# 5. Spectronaut DirectDIA per workflow (pooled cohorts)
+# 3. Convert raw files → mzML
 # ---------------------------------------------------------------------
-rule spectronaut_workflow:
+rule convert_raw_to_mzml:
     input:
-        json="data_input/spectronaut_schema.json",
-        fasta=lambda wc: FASTA,
-        htrms=expand(
-            "data_input/converted_files/{workflow}/{cohort}/{sample}.htrms",
-            workflow="{workflow}",
+        raw=lambda wc: (
+            f"{config['project_root']}data_input/raw_files/" +
+            metadata.loc[
+                (metadata.file_base == wc.sample) &
+                (metadata.workflow == wc.workflow) &
+                (metadata.cohort == wc.cohort),
+                "file_name"
+            ].iloc[0]
+        )
+    output:
+        mzml = (
+            f"{config['project_root']}data_input/converted_files/" +
+            "{workflow}/{cohort}/{sample}.mzML"
+        )
+    threads: 16
+    resources:
+        mem_mb = 262144
+    log:
+        lambda wc: f"{config['project_root']}logs/step3/convert_raw_to_mzml_{wc.workflow}_{wc.cohort}_{wc.sample}.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.mzml})
+        module load msconvert/20250218_1
+        msconvert \
+          --64 \
+          --zlib \
+          --filter "peakPicking" \
+          --filter "zeroSamples removeExtra 1-" \
+          --outdir $(dirname {output.mzml}) \
+          {input.raw} \
+          &>> {log}
+        """
+
+# ---------------------------------------------------------------------
+# 4. Marker rule — ensure all mzML conversion is complete
+# ---------------------------------------------------------------------
+rule convert_all:
+    input:
+        expand(
+            f"{config['project_root']}data_input/converted_files/{{workflow}}/{{cohort}}/{{sample}}.mzML",
+            workflow=WORKFLOWS,
             cohort=COHORTS,
             sample=SAMPLES
         )
     output:
-        report="data_output/{workflow}/{workflow}_Spectronaut_Report.tsv"
+        marker = f"{config['project_root']}data_output/A_all_converted.marker"
+    log:
+        f"{config['project_root']}logs/step4/convert_all.log"
+    shell:
+        "touch {output.marker} \ &>> {log}"
+
+# ---------------------------------------------------------------------
+# 5. DIANN analysis per workflow (all cohorts pooled)
+# ---------------------------------------------------------------------
+rule diann_analysis_workflows:
+    input:
+        library = f"{config['project_root']}data_output/library.predicted.speclib",
+        raw_data_dir = lambda wc: f"{config['project_root']}data_input/converted_files/{wc.workflow}"
+    output:
+        stats = f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv"
     threads: 16
     resources:
-        mem_mb=262144
+        mem_mb = 262144
+    log:
+        lambda wc: f"{config['project_root']}logs/step5/diann_analysis_workflows_{wc.workflow}.log"
     shell:
-        r"""
-        mkdir -p data_output/{wildcards.workflow}
-        module load --auto spectronaut/20.0.250602.92449
-        spectronaut direct \
-            -s {input.json} \
-            -n {wildcards.workflow} \
-            -o {output.report:r} \
-            -fasta data_input/{FASTA} \
-            -d data_input/converted_files/{wildcards.workflow}
+        """
+        mkdir -p {config['project_root']}data_output/{wildcards.workflow}
+        module load diann/2.0.1 gcc
+        diann \
+          --lib {input.library} \
+          --dir-all {input.raw_data_dir} \
+          --threads {threads} \
+          --out {output.stats} \
+          --qvalue 0.01 \
+          --matrix-qvalue 0.01 \
+          --mass-acc-ms1 10 \
+          --mass-acc 10 \
+          --matrices \
+          --missed-cleavages 1 \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
-# 6. Spectronaut DirectDIA per workflow + cohort
+# 6. DIANN analysis per workflow + cohort
 # ---------------------------------------------------------------------
-rule spectronaut_cohort:
+rule diann_analysis_cohorts:
     input:
-        json="data_input/spectronaut_schema.json",
-        fasta=lambda wc: FASTA,
-        htrms=expand(
-            "data_input/converted_files/{workflow}/{cohort}/{sample}.htrms",
-            workflow="{workflow}",
-            cohort="{cohort}",
-            sample=SAMPLES
+        library = f"{config['project_root']}data_output/library.predicted.speclib",
+        raw_data_dir = lambda wc: (
+            f"{config['project_root']}data_input/converted_files/{wc.workflow}/{wc.cohort}"
         )
     output:
-        report="data_output/{workflow}_{cohort}/{workflow}_{cohort}_Spectronaut_Report.tsv"
+        stats = f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv"
+    log:
+        lambda wc: f"{config['project_root']}logs/step6/diann_analysis_cohorts_{wc.workflow}_{wc.cohort}.log"
     threads: 16
     resources:
-        mem_mb=262144
+        mem_mb = 262144
     shell:
-        r"""
-        mkdir -p data_output/{wildcards.workflow}_{wildcards.cohort}
-        module load --auto spectronaut/20.0.250602.92449
-        spectronaut direct \
-            -s {input.json} \
-            -n {wildcards.workflow}_{wildcards.cohort} \
-            -o {output.report:r} \
-            -fasta data_input/{FASTA} \
-            -d data_input/converted_files/{wildcards.workflow}/{wildcards.cohort}
+        """
+        mkdir -p {config['project_root']}data_output/{wildcards.workflow}_{wildcards.cohort}
+        module load diann/2.0.1 gcc
+        diann \
+          --lib {input.library} \
+          --dir {input.raw_data_dir} \
+          --threads {threads} \
+          --out {output.stats} \
+          --qvalue 0.01 \
+          --matrix-qvalue 0.01 \
+          --mass-acc-ms1 10 \
+          --mass-acc 10 \
+          --matrices \
+          --missed-cleavages 1 \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
-# 7. Spectronaut DirectDIA across all data
+# 7. Final marker — all DIANN results complete
 # ---------------------------------------------------------------------
-rule spectronaut_all:
+rule A_all:
     input:
-        json="data_input/spectronaut_schema.json",
-        fasta=lambda wc: FASTA,
-        htrms=lambda wc: glob.glob("data_input/converted_files/**/*.htrms", recursive=True)
+        expand(
+            f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv",
+            workflow=WORKFLOWS
+        ),
+        expand(
+            f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
+            workflow=WORKFLOWS, cohort=COHORTS
+        )
     output:
-        report="data_output/all_workflows/all_Spectronaut_Report.tsv"
-    threads: 16
-    resources:
-        mem_mb=262144
+        marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+    log:
+        f"{config['project_root']}logs/step7/A_all.log"
     shell:
-        r"""
-        mkdir -p data_output/all_workflows
-        module load --auto spectronaut/20.0.250602.92449
-        spectronaut direct \
-            -s {input.json} \
-            -n all_workflows \
-            -o {output.report:r} \
-            -fasta data_input/{FASTA} \
-            -d data_input/converted_files
-        """
-
-# ---------------------------------------------------------------------
-# 8. Final marker rule
-# ---------------------------------------------------------------------
-rule spectronaut_complete:
-    input:
-        expand("data_output/{wf}/{wf}_Spectronaut_Report.tsv", wf=WORKFLOWS),
-        expand("data_output/{wf}_{ct}/{wf}_{ct}_Spectronaut_Report.tsv", wf=WORKFLOWS, ct=COHORTS),
-        "data_output/all_workflows/all_Spectronaut_Report.tsv"
-    output:
-        marker="data_output/S_all_spectronaut_complete.marker"
-    shell:
-        "touch {output.marker}"
+        "touch {output.marker} \ &>> {log}"

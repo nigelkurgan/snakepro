@@ -16,6 +16,11 @@ After cloning, configure your pipeline by editing the configuration file.
 
 ---
 
+# set up the snakemake version 9.9.0 if not avaialble in your environment/system
+```bash
+conda create -n snakemake -c bioconda -c conda-forge snakemake
+```
+
 ## Configuration
 
 Edit the **config.yml** file with the appropriate paths and options:

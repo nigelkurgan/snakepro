@@ -7,30 +7,41 @@ conda: "envs/proteomics-diann.yml"
 import pandas as pd
 from pathlib import Path
 import glob, sys
+import os
 
 # ---------------------------------------------------------------------
-# 1. Load metadata & Define global wildcard lists
+# 0. Load metadata & Define global wildcard lists
 # ---------------------------------------------------------------------
 metadata = pd.read_csv(f"{config['project_root']}data_input/ms_raw_files.csv", sep=";")
 metadata.columns = metadata.columns.str.strip()
 if not {"file_name", "workflow", "cohort"}.issubset(metadata.columns):
     sys.exit("[metadata error] Missing required columns in ms_raw_files.csv")
 
-metadata["file_base"] = metadata["file_name"].str.replace(r"\.raw$", "", regex=True)
+metadata["file_base"] = metadata["file_name"].apply(lambda f: os.path.splitext(f)[0])
 
 WORKFLOWS = sorted(metadata["workflow"].unique())
 COHORTS   = sorted(metadata["cohort"].unique())
 SAMPLES   = sorted(metadata["file_base"].unique())
 
 # ---------------------------------------------------------------------
+# 2. Locate FASTA file
+# ---------------------------------------------------------------------
+fasta_files = glob.glob("data_input/*.fa*")
+if len(fasta_files) != 1:
+    sys.exit("[FASTA error] Expect exactly one FASTA in data_input/")
+FASTA = Path(fasta_files[0]).name  # used in shell commands
+
+# ---------------------------------------------------------------------
 # 2. Generate predicted spectral library
 # ---------------------------------------------------------------------
 rule generate_spectral_library:
     input:
-        fasta = f"{config['project_root']}data_input/uniprotkb_reviewed_true_AND_model_organ_2025_02_10.fasta"
+        fasta=lambda wc: FASTA,
     output:
         library = f"{config['project_root']}data_output/library.predicted.speclib"
     threads: 16
+    log:
+        f"{config['project_root']}logs/step2/generate_spectral_library.log"
     shell:
         """
         module load diann/2.0.1 gcc
@@ -40,7 +51,8 @@ rule generate_spectral_library:
           --fasta-search \
           --gen-spec-lib \
           --out-lib {output.library} \
-          --threads {threads}
+          --threads {threads} \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
@@ -65,6 +77,8 @@ rule convert_raw_to_mzml:
     threads: 16
     resources:
         mem_mb = 262144
+    log:
+        lambda wc: f"{config['project_root']}logs/step3/convert_raw_to_mzml_{wc.workflow}_{wc.cohort}_{wc.sample}.log"
     shell:
         """
         mkdir -p $(dirname {output.mzml})
@@ -75,7 +89,8 @@ rule convert_raw_to_mzml:
           --filter "peakPicking" \
           --filter "zeroSamples removeExtra 1-" \
           --outdir $(dirname {output.mzml}) \
-          {input.raw}
+          {input.raw} \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
@@ -91,8 +106,10 @@ rule convert_all:
         )
     output:
         marker = f"{config['project_root']}data_output/A_all_converted.marker"
+    log:
+        f"{config['project_root']}logs/step4/convert_all.log"
     shell:
-        "touch {output.marker}"
+        "touch {output.marker} \ &>> {log}"
 
 # ---------------------------------------------------------------------
 # 5. DIANN analysis per workflow (all cohorts pooled)
@@ -106,6 +123,8 @@ rule diann_analysis_workflows:
     threads: 16
     resources:
         mem_mb = 262144
+    log:
+        lambda wc: f"{config['project_root']}logs/step5/diann_analysis_workflows_{wc.workflow}.log"
     shell:
         """
         mkdir -p {config['project_root']}data_output/{wildcards.workflow}
@@ -120,7 +139,8 @@ rule diann_analysis_workflows:
           --mass-acc-ms1 10 \
           --mass-acc 10 \
           --matrices \
-          --missed-cleavages 1
+          --missed-cleavages 1 \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
@@ -134,6 +154,8 @@ rule diann_analysis_cohorts:
         )
     output:
         stats = f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv"
+    log:
+        lambda wc: f"{config['project_root']}logs/step6/diann_analysis_cohorts_{wc.workflow}_{wc.cohort}.log"
     threads: 16
     resources:
         mem_mb = 262144
@@ -151,7 +173,8 @@ rule diann_analysis_cohorts:
           --mass-acc-ms1 10 \
           --mass-acc 10 \
           --matrices \
-          --missed-cleavages 1
+          --missed-cleavages 1 \
+          &>> {log}
         """
 
 # ---------------------------------------------------------------------
@@ -169,5 +192,7 @@ rule A_all:
         )
     output:
         marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+    log:
+        f"{config['project_root']}logs/step7/A_all.log"
     shell:
-        "touch {output.marker}"
+        "touch {output.marker}
