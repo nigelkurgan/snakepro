@@ -4,6 +4,8 @@
 quant_tool: diann           # choose between "diann" or "spectronaut"
 run_qc: true                # whether to run QC rules
 batch_correction: false     # only set up for diann right now
+run_mode: all            # options: cohort, workflow, all; default = all if blank
+
 # ---------------------------------------------------------------------
 # 1. Paths & metadata
 # ---------------------------------------------------------------------

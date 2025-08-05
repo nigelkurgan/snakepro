@@ -8,28 +8,37 @@ import pandas as pd
 from pathlib import Path
 import glob, sys
 import os
+import re
 
 # ---------------------------------------------------------------------
 # 0. Load metadata & Define global wildcard lists
 # ---------------------------------------------------------------------
+# Load metadata
 metadata = pd.read_csv(f"{config['project_root']}data_input/ms_raw_files.csv", sep=";")
 metadata.columns = metadata.columns.str.strip()
+
+# Ensure required columns
 if not {"file_name", "workflow", "cohort"}.issubset(metadata.columns):
     sys.exit("[metadata error] Missing required columns in ms_raw_files.csv")
 
-metadata["file_base"] = metadata["file_name"].apply(lambda f: os.path.splitext(f)[0])
+# Strip known raw file extensions to get base name
+def strip_extension(f):
+    return re.sub(r'\.(raw|d)$', '', f, flags=re.IGNORECASE)
 
+metadata["file_base"] = metadata["file_name"].apply(strip_extension)
+
+# global wildcards
 WORKFLOWS = sorted(metadata["workflow"].unique())
 COHORTS   = sorted(metadata["cohort"].unique())
 SAMPLES   = sorted(metadata["file_base"].unique())
 
 # ---------------------------------------------------------------------
-# 2. Locate FASTA file
+# 1. Locate FASTA file
 # ---------------------------------------------------------------------
 fasta_files = glob.glob("data_input/*.fa*")
 if len(fasta_files) != 1:
     sys.exit("[FASTA error] Expect exactly one FASTA in data_input/")
-FASTA = Path(fasta_files[0]).name  # used in shell commands
+FASTA = Path(fasta_files[0]).name
 
 # ---------------------------------------------------------------------
 # 2. Generate predicted spectral library
@@ -44,6 +53,7 @@ rule generate_spectral_library:
         f"{config['project_root']}logs/step2/generate_spectral_library.log"
     shell:
         """
+        mkdir -p $(dirname {log})
         module load diann/2.0.1 gcc
         diann \
           --fasta {input.fasta} \
@@ -60,8 +70,8 @@ rule generate_spectral_library:
 # ---------------------------------------------------------------------
 rule convert_raw_to_mzml:
     input:
-        raw=lambda wc: (
-            f"{config['project_root']}data_input/raw_files/" +
+        raw=lambda wc: str(
+            Path(config['project_root']) / "data_input" / "raw_files" /
             metadata.loc[
                 (metadata.file_base == wc.sample) &
                 (metadata.workflow == wc.workflow) &
@@ -82,7 +92,9 @@ rule convert_raw_to_mzml:
     shell:
         """
         mkdir -p $(dirname {output.mzml})
+        mkdir -p $(dirname {log})
         module load msconvert/20250218_1
+
         msconvert \
           --64 \
           --zlib \
@@ -92,6 +104,7 @@ rule convert_raw_to_mzml:
           {input.raw} \
           &>> {log}
         """
+
 
 # ---------------------------------------------------------------------
 # 4. Marker rule — ensure all mzML conversion is complete
@@ -109,10 +122,14 @@ rule convert_all:
     log:
         f"{config['project_root']}logs/step4/convert_all.log"
     shell:
-        "touch {output.marker} \ &>> {log}"
+        """
+        mkdir -p $(dirname {log})
+        touch {output.marker} &>> {log}
+        """
 
 # ---------------------------------------------------------------------
-# 5. DIANN analysis per workflow (all cohorts pooled)
+# 5. DIANN analysis per workflow (all cohorts pooled) 
+### Use this when you have different sample types = workflow but want different groups/cohorts together
 # ---------------------------------------------------------------------
 rule diann_analysis_workflows:
     input:
@@ -128,6 +145,7 @@ rule diann_analysis_workflows:
     shell:
         """
         mkdir -p {config['project_root']}data_output/{wildcards.workflow}
+        mkdir -p $(dirname {log})
         module load diann/2.0.1 gcc
         diann \
           --lib {input.library} \
@@ -144,7 +162,7 @@ rule diann_analysis_workflows:
         """
 
 # ---------------------------------------------------------------------
-# 6. DIANN analysis per workflow + cohort
+# 6. DIANN analysis per worklow and per cohort
 # ---------------------------------------------------------------------
 rule diann_analysis_cohorts:
     input:
@@ -162,6 +180,7 @@ rule diann_analysis_cohorts:
     shell:
         """
         mkdir -p {config['project_root']}data_output/{wildcards.workflow}_{wildcards.cohort}
+        mkdir -p $(dirname {log})
         module load diann/2.0.1 gcc
         diann \
           --lib {input.library} \
@@ -178,21 +197,79 @@ rule diann_analysis_cohorts:
         """
 
 # ---------------------------------------------------------------------
-# 7. Final marker — all DIANN results complete
+# 7. DIANN analysis — ALL samples together (no cohort/workflow split)
 # ---------------------------------------------------------------------
-rule A_all:
+rule diann_analysis_all:
     input:
-        expand(
-            f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv",
-            workflow=WORKFLOWS
-        ),
-        expand(
-            f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
-            workflow=WORKFLOWS, cohort=COHORTS
-        )
+        library = f"{config['project_root']}data_output/library.predicted.speclib",
+        raw_data_dir = f"{config['project_root']}data_input/converted_files/"
     output:
-        marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+        stats = f"{config['project_root']}data_output/ALL/ALL.stats.tsv"
     log:
-        f"{config['project_root']}logs/step7/A_all.log"
+        f"{config['project_root']}logs/step6/diann_analysis_all.log"
+    threads: 16
+    resources:
+        mem_mb = 262144
     shell:
-        "touch {output.marker}
+        """
+        mkdir -p {config['project_root']}data_output/ALL
+        mkdir -p $(dirname {log})
+        module load diann/2.0.1 gcc
+        diann \
+          --lib {input.library} \
+          --dir-all {input.raw_data_dir} \
+          --threads {threads} \
+          --out {output.stats} \
+          --qvalue 0.01 \
+          --matrix-qvalue 0.01 \
+          --mass-acc-ms1 10 \
+          --mass-acc 10 \
+          --matrices \
+          --missed-cleavages 1 \
+          &>> {log}
+        """
+
+# ---------------------------------------------------------------------
+# 8. Final marker — based on run_mode in config
+# ---------------------------------------------------------------------
+RUN_MODE = config.get("run_mode", "all")
+
+if RUN_MODE == "cohort":
+    rule A_all:
+        input:
+            expand(
+                f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
+                workflow=WORKFLOWS,
+                cohort=COHORTS
+            )
+        output:
+            marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+        log:
+            f"{config['project_root']}logs/step7/A_all_cohort.log"
+        shell:
+            "mkdir -p $(dirname {log}) && touch {output.marker} &>> {log}"
+
+elif RUN_MODE == "workflow":
+    rule A_all:
+        input:
+            expand(
+                f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv",
+                workflow=WORKFLOWS
+            )
+        output:
+            marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+        log:
+            f"{config['project_root']}logs/step7/A_all_workflow.log"
+        shell:
+            "mkdir -p $(dirname {log}) && touch {output.marker} &>> {log}"
+
+elif RUN_MODE == "all":
+    rule A_all:
+        input:
+            f"{config['project_root']}data_output/ALL/ALL.stats.tsv"
+        output:
+            marker = f"{config['project_root']}data_output/A_all_diann_complete.marker"
+        log:
+            f"{config['project_root']}logs/step7/A_all_all.log"
+        shell:
+            "mkdir -p $(dirname {log}) && touch {output.marker} &>> {log}"

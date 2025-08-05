@@ -45,15 +45,15 @@ rule all:
 # ---------------------------------------------------------------------
 
 if TOOL == "diann":
-    include: "rules/A_diann.smk"
+    include: "rules/01A_diann.smk"
 elif TOOL == "spectronaut":
-    include: "rules/D_spectronaut.smk"
+    include: "rules/01B_spectronaut.smk"
 else:
     raise ValueError(f"Unsupported quant_tool: {TOOL}")
 
 if RUN_QC:
-    include: "rules/B_QC.smk"
+    include: "rules/02_QC.smk"
 
 # Only run sample-removal branch if DIANN and exclude_samples is set
 if TOOL == "diann" and config.get("exclude_samples"):
-    include: "rules/C_diann_remove.smk"
+    include: "rules/03_diann_remove.smk"
