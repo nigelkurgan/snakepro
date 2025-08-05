@@ -23,7 +23,7 @@ This **Snakemake** pipeline enables proteomics researchers to **quantify large-c
 Clone the repository into your server's directory:
 
 ```bash
-git clone --recursive https://github.com/nigelkuran/snakepro.git
+git clone --recursive https://github.com/nigelkurgan/snakepro.git
 ```
 
 Install Snakemake (version 9.9.0 or compatible):
@@ -273,4 +273,4 @@ This pipeline provides an automated solution for **quantitative proteomics analy
 
 ---
 
-**For further help, open an issue on the [GitHub repository](https://github.com/nigelkuran/snakepro/issues) or contact the pipeline maintainer.**
+**For further help, open an issue on the [GitHub repository](https://github.com/nigelkurgan/snakepro/issues) or contact the pipeline maintainer.**
