@@ -16,41 +16,41 @@ generate_spectral_library:
   time: "3:00:00"
   cpus: 16
 
-convert_raw_files:  # for mzML
+convert_raw_to_mzml:
   mem: 15G
   time: "24:00:00"
   cpus: 16
 
-convert_to_htrms:  # for Spectronaut
+convert_raw_to_htrms:
   mem: 60G
   time: "24:00:00"
   cpus: 4
 
+convert_all:
+  mem: 2G
+  time: "00:30:00"
+  cpus: 1
+
 # ---------------------------------------------------------------------
-# DIANN Quantificatoin
+# DIANN Quantification
 # ---------------------------------------------------------------------
 
-run_diann_analysis:
+diann_analysis_workflows:
   mem: 20G
   time: "24:00:00"
   cpus: 16
 
-diann_analysis_workflows_removed:
+diann_analysis_cohorts:
   mem: 20G
   time: "24:00:00"
   cpus: 16
 
-diann_analysis_cohorts_removed:
+diann_analysis_all:
   mem: 20G
   time: "24:00:00"
   cpus: 16
 
 A_all:
-  mem: 20G
-  time: "80:00:00"
-  cpus: 16
-
-A_quantify_all:
   mem: 2G
   time: "00:30:00"
   cpus: 1
@@ -83,17 +83,17 @@ summarize_qc:
 # Spectronaut Quantification
 # ---------------------------------------------------------------------
 
-spectronaut_workflow:
+spectronaut_analysis_workflows:
   mem: 256G
   time: "24:00:00"
   cpus: 16
 
-spectronaut_cohort:
+spectronaut_analysis_cohorts:
   mem: 256G
   time: "24:00:00"
   cpus: 16
 
-spectronaut_all:
+spectronaut_analysis_all:
   mem: 256G
   time: "48:00:00"
   cpus: 16

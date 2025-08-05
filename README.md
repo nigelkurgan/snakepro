@@ -1,6 +1,20 @@
 # Proteomics Quantification and Quality Control Pipeline
 
-This **Snakemake** pipeline allows proteomics researchers to **quantify large-cohort DIA mass spectrometry data** and **automatically generate a quality control (QC) report in PDF format**. It integrates preprocessing, filtering, normalization, PCA, outlier detection, and contamination analysis into a reproducible and scalable workflow.
+This **Snakemake** pipeline enables proteomics researchers to **quantify large-cohort DIA mass spectrometry data** and **automatically generate a quality control (QC) report in PDF format**. It supports both **DIA-NN** and **Spectronaut** quantification strategies, and is designed to be modular, robust, and user-friendly—even for those new to Snakemake.
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Input Data Preparation](#input-data-preparation)
+- [Usage](#usage)
+- [Pipeline Structure & Modes](#pipeline-structure--modes)
+- [Output](#output)
+- [Features](#features)
+- [Troubleshooting](#troubleshooting)
+- [Overview](#overview)
 
 ---
 
@@ -12,22 +26,24 @@ Clone the repository into your server's directory:
 git clone --recursive https://github.com/nigelkuran/snakepro.git
 ```
 
-After cloning, configure your pipeline by editing the configuration file.
+Install Snakemake (version 9.9.0 or compatible):
+
+```bash
+conda create -n snakemake -c bioconda -c conda-forge snakemake
+conda activate snakemake
+```
 
 ---
 
-# set up the snakemake version 9.9.0 if not avaialble in your environment/system
-```bash
-conda create -n snakemake -c bioconda -c conda-forge snakemake
-```
-
 ## Configuration
 
-Edit the **config.yml** file with the appropriate paths and options:
+Edit the **config/config.yml** file with the appropriate paths and options.  
+**Example:**
 
 ```yaml
 # Tool selection
 quant_tool: diann          # "diann" or "spectronaut"
+run_mode: cohort           # "cohort", "workflow", or "all"
 run_qc: true               # enable QC report generation
 sn_batch_correct: false    # Spectronaut-specific flag
 
@@ -47,63 +63,81 @@ contamination_panel_file: 'data_input/contamination_panel.xlsx'
 exclude_samples: []         # e.g. ["sample_001", "sample_042"]
 batch_correction: false
 batch_effect_column: "plate"
-
 ```
 
-### Add files
+**Key parameters:**
+- `quant_tool`: Choose `"diann"` or `"spectronaut"` for quantification.
+- `run_mode`: Controls how quantification is performed:
+    - `"cohort"`: Per workflow and cohort (default).
+    - `"workflow"`: Per workflow (all cohorts pooled).
+    - `"all"`: All samples pooled together.
+- `run_qc`: If `true`, generates QC reports.
+- `exclude_samples`: List of samples to exclude from analysis.
+- `batch_correction`: Enable/disable batch correction.
 
-Place the following files in the specified directories:
+---
 
-- **Raw data files** 
-  ```bash
-  pipeline/data_input/raw/
-  ```
-Use the following command:  
-  ```bash
-  scp -r {directory}/raw user@headnodefl.uni.domain:/project//data/pipeline/data_input/raw/
-  ```
-- **FASTA file and metadata**
-  ```bash
-  pipeline/data_input/
-  ```
+## Input Data Preparation
+
+1. **Raw data files**  
+   Place your raw files (e.g., Thermo `.raw`, Bruker `.d` folders) in:
+   ```
+   data_input/raw_files/
+   ```
+   Example upload command:
+   ```bash
+   scp -r {directory}/raw_files user@server:/path/to/pipeline/data_input/raw_files/
+   ```
+
+2. **FASTA file and metadata**  
+   Place your reference FASTA and metadata CSV in:
+   ```
+   data_input/
+   ```
+   - Metadata file: `ms_raw_files.csv` (must include columns: `file_name`, `workflow`, `cohort`)
+   - FASTA file: e.g., `uniprot_reference.fa`
+
+3. **(Optional) Contamination panel**  
+   If using contamination analysis, place the panel file in `data_input/`.
 
 ---
 
 ## Usage
-We recommend the creation of a **tmux session** to run these commands.
+
+We recommend running the pipeline in a **tmux** session for stability:
+
 ```bash
 tmux
 ```
 
-To run the full workflow and generate a QC report, execute:
+To run the full workflow and generate a QC report:
 
 ```bash
 bash run_slurm.sh all
 ```
-This will perform quantification, generate QC plots, and output a full PDF report
 
----
+This will perform quantification, generate QC plots, and output a full PDF report.
 
-Alternatively, you can invoke components manually:
+### Running Individual Pipeline Steps
+
+You can also run specific steps:
 
 ```bash
-bash run_slurm.sh convert_all            # data conversion
-bash run_slurm.sh A_all                  # full quantification (DIANN or Spectronaut)
-bash run_slurm.sh summarize_qc           # individual and summary QC reports
+bash run_slurm.sh convert_all            # Data conversion only
+bash run_slurm.sh A_all                  # Full quantification (DIANN or Spectronaut)
+bash run_slurm.sh summarize_qc           # QC reports only
 ```
 
-### Post-Quality Control
+### Post-Quality Control Actions
 
-After analysing the report, you may want to:
-
-#### Apply batch correction
-Edit the  **config.yml** file in the batch correction settings and run the following command:
+**Apply batch correction:**  
+Edit `config/config.yml` to enable batch correction and specify the batch column, then run:
 ```bash
 bash run_slurm.sh summarize_qc
 ```
 
-#### Remove identified outlier samples
-Edit the  **config.yml** file by adding the samples you want to remove in the "exclude_samples" list and run the following command:
+**Remove identified outlier samples:**  
+Add sample IDs to `exclude_samples` in `config/config.yml`, then run:
 ```bash
 bash run_slurm.sh remove_all_samples 
 bash run_slurm.sh summarize_qc
@@ -111,115 +145,132 @@ bash run_slurm.sh summarize_qc
 
 ---
 
+## Pipeline Structure & Modes
+
+The pipeline is **modular** and adapts to your configuration:
+
+- **Quantification tool:**  
+  Select between DIA-NN and Spectronaut via `quant_tool` in the config.
+
+- **Run modes:**  
+  - `"cohort"`: Quantifies each workflow/cohort combination separately.
+  - `"workflow"`: Quantifies all cohorts pooled per workflow.
+  - `"all"`: Quantifies all samples pooled together.
+
+- **Automatic file handling:**  
+  - Raw file types (e.g., `.raw`, `.d`) are inferred from your metadata.
+  - Output files are always in the correct format for the selected tool.
+
+- **Final marker files:**  
+  - `data_output/A_all_diann_complete.marker` (for DIA-NN)
+  - `data_output/S_all_spectronaut_complete.marker` (for Spectronaut)
+  These indicate successful completion of the pipeline.
+
+---
+
 ## Output
 
 The pipeline generates:
-- **Quality Control visualizations in png** 
-- A **comprehensive individual PDF report**
-- A **summary PDF report** 
+- **Quantification results** (per run mode and tool)
+- **Quality Control visualizations** (PNG)
+- **Comprehensive individual PDF report**
+- **Summary PDF report**
 
-To download the files use:
+To download results:
 ```bash
-scp -r kuxxx@esrumhead01fl.unicph.domain:/{directory}/pipeline/data_output/{QC_remove_samples_and_batch_effect/}/ ~/{directory}/
+scp -r user@server:/path/to/pipeline/data_output/ ~/local_directory/
 ```
----
-
-## Overview
-
-This pipeline provides an automated solution for **quantitative proteomics analysis** based on **Data-Independent Acquisition (DIA) mass spectrometry**. The workflow is designed to handle large cohorts and generate both **individual** and **summary quality control reports**.
-
-
-<img width="848" alt="Screenshot 2025-04-20 at 21 30 15" src="https://github.com/user-attachments/assets/b0bc5efe-4f48-4738-87e5-2d450beba3fe" />
-
-
-
-The process begins with two main inputs:
-- A **FASTA file** containing the reference protein sequence database.
-- **Raw DIA-MS files**, which are converted into the open-format `.mzML` files using a raw file converter (MSConvert).
-
-These inputs are then used in **DIA-NN**, which performs:
-1. **Spectral library generation**, based on the FASTA file.
-2. **Quantification**, where the spectral library and `.mzML` files are used to identify and quantify peptides and proteins.
-
-Once quantification is complete, the pipeline proceeds to the **Quality Control (QC)** step.
-
-The QC step generates two types of reports:
-- An **Individual report** for detailed insights of each workflow.
-- A **Summary report** providing a summary of all workflows.
-
-Following QC analysis, users are given two options:
-- **Batch Correction**: If batch effects are identified, users can correct the batch effects by updating the configuration file.
-- **Sample Removal**: If outlier samples are detected, users can remove them by adding their sample identifiers to the configuration file.
-
-If no corrections or removals are needed, the workflow is finalized.
 
 ---
 
 ## Features
 
 **Preprocessing**
-   - Log 2 transformation
+   - Log2 transformation
    - Removal of contaminants
    - Imputation
    - Normalization
    - Filtering
 
 **Sample Distribution Plot**
-   - Displays the intensity distribution of all samples
-   - Highlights potential outliers
+   - Intensity distribution of all samples
+   - Outlier highlighting
 
 **Missing Values Heatmap**
    - Visualizes missing data across proteins and samples
 
 **Missing Values Per Group**
-   - Compares the amount of missing data per group
+   - Compares missing data per group
 
 **Missing Proteins Distribution by Group**
-   - Shows how missing protein counts vary across experimental groups
+   - Shows missing protein counts by group
 
 **Sample Correlation Heatmap**
-   - Correlation matrix between samples based on protein intensities (Pearson Correlation)
+   - Pearson correlation matrix between samples
 
 **Hierarchical Clustering Dendrogram**
-   - Clusters samples using a distance-based method (Ward algorithm)
+   - Clusters samples using Ward algorithm
 
 **PCA Plots**
-   - PCA colored by cluster
-   - Shaped by by metadata factors (e.g., plate, condition, time)
-   - Pontential Outliers highlighthed by Euclidian and Mahnolobis distances
+   - Colored by cluster and metadata factors (e.g., plate, condition, time)
+   - Outlier detection
 
 **Enrichment of Principal Components**
-   - Visualizes enrichment of Principal Components
-    
+   - Visualizes enrichment of principal components
+
 **Boxplot of Intra and Inter Plate Distances**
-   - Visualizes within-plate vs between-plate variation
+   - Within-plate vs between-plate variation
 
 **Density Plots of Sample Intensities**
-   - Density distribution of intensities per sample
-   - Potential outliers are identified
+   - Density distribution per sample, outlier identification
 
 **Mean Intensity Density Plot**
-   - Mean density of all samples with potential outliers samples overlaid for better analysis
+   - Mean density with outliers overlaid
 
 **Intensity Histogram (Imputed vs Non-Imputed)**
-   - Comparison of the intensity distributions before and after imputation
+   - Compare before/after imputation
 
 **Albumin Concentration Plot**
-   - Visualizes albumin concentration per sample
+   - Albumin per sample
 
 **Protein Rank-Abundance Plot**
-   - Displays proteins ranked by abundance (log-scale)
+   - Proteins ranked by abundance (log-scale)
 
-**Intra-individual CV Scatter Plots**
-   - For all samples and by condition
-
-**Inter-individual CV Scatter Plots**
+**Intra/Inter-individual CV Scatter Plots**
    - For all samples and by condition
 
 **Contamination Panel**
-   - Barplot of contaminant proteins
-   - Potential outlier samples highlighted 
+   - Barplot of contaminant proteins, outlier highlighting
 
-**Outlier table**
-   - An overview table of potential outliers and the different analysis they are highlighted
+**Outlier Table**
+   - Overview of potential outliers and detection methods
 
+---
+
+## Troubleshooting
+
+- **Missing required columns in metadata:**  
+  Ensure your `ms_raw_files.csv` contains at least `file_name`, `workflow`, and `cohort`.
+
+- **No FASTA file found:**  
+  Place a single FASTA file in `data_input/`.
+
+- **Pipeline fails on log file creation:**  
+  All rules create log directories as needed; if you see errors, check directory permissions.
+
+- **Not sure which run mode to use?**  
+  - Use `"cohort"` for most studies (default).
+  - Use `"workflow"` if you want to pool all cohorts per workflow.
+  - Use `"all"` to pool all samples together.
+
+---
+
+## Overview
+
+This pipeline provides an automated solution for **quantitative proteomics analysis** based on **Data-Independent Acquisition (DIA) mass spectrometry**. The workflow is designed to handle large cohorts and generate both **individual** and **summary quality control reports**.
+
+<img width="848" alt="Pipeline Overview" src="https://github.com/user-attachments/assets/b0bc5efe-4f48-4738-87e5-2d450beba3fe" />
+
+---
+
+**For further help, open an issue on the [GitHub repository](https://github.com/nigelkuran/snakepro/issues) or contact the pipeline maintainer.**

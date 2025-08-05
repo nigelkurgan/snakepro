@@ -2,10 +2,9 @@
 # Load configuration and set workdir
 # ---------------------------------------------------------------------
 
+configfile: "config/config.yml"
 
-configfile: "config/config.yml"  # Loads parameters from config file :contentReference[oaicite:1]{index=1}
-
-workdir: config["project_root"]  # Set working directory to project root
+workdir: config["project_root"]
 
 # Pull key options from config
 TOOL   = config["quant_tool"].lower()
@@ -30,9 +29,9 @@ if TOOL == "diann" or TOOL == "spectronaut":
 
 def final_outputs():
     if TOOL == "diann":
-        return expand("data_output/{wf}/A_all_diann_complete.marker", wf=WORKFLOWS)
+        return "data_output/A_all_diann_complete.marker"
     elif TOOL == "spectronaut":
-        return expand("data_output/S_all_spectronaut_complete.marker", wf=WORKFLOWS)
+        return "data_output/S_all_spectronaut_complete.marker"
     else:
         raise ValueError(f"Unsupported quant_tool: {TOOL}")
 

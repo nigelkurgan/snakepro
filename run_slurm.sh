@@ -4,7 +4,7 @@
 
 #SBATCH --job-name=quant_%j    # job name
 #SBATCH --mail-type=END,FAIL    # mail events (NONE, BEGIN, END, FAIL, ALL)
-#SBATCH --mail-user=jwn351@ku.dk    # email address to receive the notification    
+#SBATCH --mail-user=youremail@ku.dk    # email address to receive the notification    
 #SBATCH -c 1    # number of requested cores
 #SBATCH --mem=2gb    # total requested RAM
 #SBATCH --time=1-00:00:00               # max. running time of the job, format in D-HH:MM:SS
