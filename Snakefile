@@ -10,11 +10,19 @@ workdir: config["project_root"]
 TOOL   = config["quant_tool"].lower()
 RUN_QC = config.get("run_qc", True)
 
+# ---------------------------------------------------------------------
+# Always include FASTA module (it defines FASTA for both modes)
+# - If config['fasta'] == "fetch_fasta": defines rule to download + sets FASTA
+# - Else: checks user-provided file exists + sets FASTA
+# Downstream rules can just use: input: fasta=FASTA
+# ---------------------------------------------------------------------
+include: "rules/00_fetch_fasta.smk"
+
 # Read workflows and cohorts from config, or else infer from metadata
 WORKFLOWS = config.get("workflows", None)
 COHORTS   = config.get("cohorts", None)
 
-if TOOL == "diann" or TOOL == "spectronaut":
+if TOOL in ("diann", "spectronaut"):
     import pandas as pd
     md = pd.read_csv("data_input/ms_raw_files.csv", sep=";")
     md.columns = md.columns.str.strip()

@@ -33,12 +33,9 @@ COHORTS   = sorted(metadata["cohort"].unique())
 SAMPLES   = sorted(metadata["file_base"].unique())
 
 # ---------------------------------------------------------------------
-# 1. Locate FASTA file
+# 1. Fetch FASTA file: defined in 00_fetch_fasta.smk
 # ---------------------------------------------------------------------
-fasta_files = glob.glob("data_input/*.fa*")
-if len(fasta_files) != 1:
-    sys.exit("[FASTA error] Expect exactly one FASTA in data_input/")
-FASTA = Path(fasta_files[0]).name
+FASTA = Path(FASTA_OUT)
 
 # ---------------------------------------------------------------------
 # 2. Generate predicted spectral library
@@ -137,7 +134,7 @@ rule diann_analysis_workflows:
         raw_data_dir = lambda wc: f"{config['project_root']}data_input/converted_files/{wc.workflow}"
     output:
         stats = f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv"
-    threads: 16
+    threads: 56
     resources:
         mem_mb = 262144
     log:
@@ -174,7 +171,7 @@ rule diann_analysis_cohorts:
         stats = f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv"
     log:
         lambda wc: f"{config['project_root']}logs/step6/diann_analysis_cohorts_{wc.workflow}_{wc.cohort}.log"
-    threads: 16
+    threads: 56
     resources:
         mem_mb = 262144
     shell:
@@ -207,7 +204,7 @@ rule diann_analysis_all:
         stats = f"{config['project_root']}data_output/ALL/ALL.stats.tsv"
     log:
         f"{config['project_root']}logs/step6/diann_analysis_all.log"
-    threads: 16
+    threads: 56
     resources:
         mem_mb = 262144
     shell:

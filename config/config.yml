@@ -2,6 +2,9 @@
 # 0. Main options
 # ---------------------------------------------------------------------
 quant_tool: diann           # choose between "diann" or "spectronaut"
+spectronaut_activation_key: YOUR_KEY_HERE # Spectronaut activation key
+spectronaut_direct_schema: "BGS Factory Settings"  # or path to .prop file if custom schema
+spectronaut_report_schema: "BGS Factory Settings"  # or path to .prop file if custom schema
 run_qc: true                # whether to run QC rules
 batch_correction: false     # only set up for diann right now
 run_mode: all            # options: cohort, workflow, all; default = all if blank
@@ -11,7 +14,20 @@ run_mode: all            # options: cohort, workflow, all; default = all if blan
 # ---------------------------------------------------------------------
 project_root: "/path/to/pipeline/"            # absolute or relative
 metadata: "data_input/ms_raw_files.csv"       # metadata mapping raw files
-fasta_file: "data_input/uniprot_reference.fa" # FASTA used for library or QC
+project_name: "My_Project"                   # name of the project
+
+# If you already have a fasta, provide its path (absolute or relative), e.g.:
+# fasta: "data_input/custom/human_swissprot_2025_07.fasta"
+# Otherwise, set to the sentinel value below to fetch from UniProt:
+fasta: "fetch_fasta"
+
+# Parameters used when fasta == "fetch_fasta"
+fasta_out_dir: "data_input"
+organism_id: 9606         # 9606 (human), 10090 (mouse), etc.
+reviewed: true            # Swiss-Prot only
+include_isoforms: false    # true = canonical + isoforms, false = canonical only
+exclude_fragments: true   # true = add 'fragment:false' to query
+filename_prefix: "uniprot"  # optional: affects output name only
 
 # ---------------------------------------------------------------------
 # 2. Quality Control settings

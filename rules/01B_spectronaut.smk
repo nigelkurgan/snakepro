@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------
-# SPECTRONAUT pipeline rules (modular, flexible, robust)
+# SPECTRONAUT pipeline rules 
 # ---------------------------------------------------------------------
 
 conda: "envs/proteomics-spectronaut.yml"
@@ -24,12 +24,32 @@ COHORTS   = sorted(metadata["cohort"].unique())
 SAMPLES   = sorted(metadata["file_base"].unique())
 
 # ---------------------------------------------------------------------
-# 1. Locate FASTA file
+# Load activation key and schemas from config
 # ---------------------------------------------------------------------
-fasta_files = glob.glob("data_input/*.fa*")
-if len(fasta_files) != 1:
-    sys.exit("[FASTA error] Expect exactly one FASTA in data_input/")
-FASTA = Path(fasta_files[0]).name  # used in shell commands
+ACTIVATION_KEY = config.get("spectronaut_activation_key")
+DIRECT_SCHEMA = config.get("spectronaut_direct_schema", "")
+REPORT_SCHEMA = config.get("spectronaut_report_schema", "")      
+
+if not ACTIVATION_KEY:
+    sys.exit("[config error] Missing 'spectronaut_activation_key' in config.yml")
+
+# ---------------------------------------------------------------------
+# 1. Fetch FASTA file: defined in 00_fetch_fasta.smk
+# ---------------------------------------------------------------------
+FASTA = Path(FASTA_OUT)
+
+# ---------------------------------------------------------------------
+# CLI flag helpers
+# ---------------------------------------------------------------------
+def direct_schema_flag():
+    return f"-s \"{DIRECT_SCHEMA}\"" if DIRECT_SCHEMA else ""
+
+def report_schema_flag():
+    return f"-rs {REPORT_SCHEMA}" if REPORT_SCHEMA else ""
+
+def fasta_flag():
+    return f"-fasta {FASTA}"
+
 
 # ---------------------------------------------------------------------
 # 2. Convert raw files → htrms (Spectronaut format)
@@ -50,21 +70,23 @@ rule convert_raw_to_htrms:
             f"{config['project_root']}data_input/converted_files/" +
             "{workflow}/{cohort}/{sample}.htrms"
         )
-    threads: 8
+    threads: 16
     resources:
         mem_mb = 64000
     log:
         lambda wc: f"{config['project_root']}logs/step3/convert_raw_to_htrms_{wc.workflow}_{wc.cohort}_{wc.sample}.log"
     shell:
-        """
-        mkdir -p $(dirname {output.htrms})
-        mkdir -p $(dirname {log})
+        f"""
+        mkdir -p $(dirname {{output.htrms}})
+        mkdir -p $(dirname {{log}})
         module load spectronaut/20.0.250602.92449
+        spectronaut -activate {ACTIVATION_KEY}
         spectronaut convert \
-          -i {input.raw} \
-          -o {output.htrms} \
+          -i {{input.raw}} \
+          -o {{output.htrms}} \
           -nogui \
-          &>> {log}
+          &>> {{log}}
+        spectronaut -deactivate
         """
 
 # ---------------------------------------------------------------------
@@ -96,21 +118,25 @@ rule spectronaut_analysis_workflows:
         spectra_dir = lambda wc: f"{config['project_root']}data_input/converted_files/{wc.workflow}"
     output:
         report = f"{config['project_root']}data_output/{{workflow}}/{{workflow}}_Spectronaut_Report.tsv"
-    threads: 16
+    threads: 56
     resources:
-        mem_mb = 262144
+        mem_mb = 524288
     log:
         lambda wc: f"{config['project_root']}logs/step5/spectronaut_analysis_workflows_{wc.workflow}.log"
     shell:
-        """
-        mkdir -p {config['project_root']}data_output/{wildcards.workflow}
-        mkdir -p $(dirname {log})
-        module load spectronaut/20.0.250602.92449
+        f"""
+        mkdir -p {config['project_root']}data_output/{{wildcards.workflow}}
+        mkdir -p $(dirname {{log}})
+        module load spectronaut
+        spectronaut -activate {ACTIVATION_KEY}
         spectronaut direct \
-          -d {input.spectra_dir} \
-          -o {output.report} \
-          -nogui \
-          &>> {log}
+          -n {config['project_name']}
+          {direct_schema_flag()} \
+          -o {{output.report}} \
+          {fasta_flag()} \
+          -d {{input.spectra_dir}} \
+          {report_schema_flag()} &>> {{log}}
+        spectronaut -deactivate
         """
 
 # ---------------------------------------------------------------------
@@ -129,19 +155,23 @@ rule spectronaut_analysis_cohorts:
     resources:
         mem_mb = 262144
     shell:
-        """
-        mkdir -p {config['project_root']}data_output/{wildcards.workflow}_{wildcards.cohort}
-        mkdir -p $(dirname {log})
-        module load spectronaut/20.0.250602.92449
+        f"""
+        mkdir -p {config['project_root']}data_output/{{wildcards.workflow}}_{{wildcards.cohort}}
+        mkdir -p $(dirname {{log}})
+        module load spectronaut
+        spectronaut -activate {ACTIVATION_KEY}
         spectronaut direct \
-          -d {input.spectra_dir} \
-          -o {output.report} \
-          -nogui \
-          &>> {log}
+          -n {config['project_name']}
+          {direct_schema_flag()} \
+          -o {{output.report}} \
+          {fasta_flag()} \
+          -d {{input.spectra_dir}} \
+          {report_schema_flag()} &>> {{log}}
+        spectronaut -deactivate
         """
 
 # ---------------------------------------------------------------------
-# 6. Spectronaut analysis — ALL samples together (no cohort/workflow split)
+# 6. Spectronaut analysis — ALL samples together
 # ---------------------------------------------------------------------
 rule spectronaut_analysis_all:
     input:
@@ -150,19 +180,23 @@ rule spectronaut_analysis_all:
         report = f"{config['project_root']}data_output/ALL/ALL_Spectronaut_Report.tsv"
     log:
         f"{config['project_root']}logs/step6/spectronaut_analysis_all.log"
-    threads: 16
+    threads: 112
     resources:
         mem_mb = 262144
     shell:
-        """
+        f"""
         mkdir -p {config['project_root']}data_output/ALL
-        mkdir -p $(dirname {log})
-        module load spectronaut/20.0.250602.92449
+        mkdir -p $(dirname {{log}})
+        module load spectronaut
+        spectronaut -activate {ACTIVATION_KEY}
         spectronaut direct \
-          -d {input.spectra_dir} \
-          -o {output.report} \
-          -nogui \
-          &>> {log}
+          -n {config['project_name']}
+          {direct_schema_flag()} \
+          -o {{output.report}} \
+          {fasta_flag()} \
+          -d {{input.spectra_dir}} \
+          {report_schema_flag()} &>> {{log}}
+        spectronaut -deactivate
         """
 # ---------------------------------------------------------------------
 # 7. Final marker — based on run_mode in config
