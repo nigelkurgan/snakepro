@@ -232,7 +232,7 @@ rule diann_analysis_all:
 RUN_MODE = config.get("run_mode", "all")
 
 if RUN_MODE == "cohort":
-    rule A_all:
+    rule diann_all:
         input:
             expand(
                 f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}.stats.tsv",
@@ -247,7 +247,7 @@ if RUN_MODE == "cohort":
             "mkdir -p $(dirname {log}) && touch {output.marker} &>> {log}"
 
 elif RUN_MODE == "workflow":
-    rule A_all:
+    rule diann_all:
         input:
             expand(
                 f"{config['project_root']}data_output/{{workflow}}/{{workflow}}.stats.tsv",
@@ -261,7 +261,7 @@ elif RUN_MODE == "workflow":
             "mkdir -p $(dirname {log}) && touch {output.marker} &>> {log}"
 
 elif RUN_MODE == "all":
-    rule A_all:
+    rule diann_all:
         input:
             f"{config['project_root']}data_output/ALL/ALL.stats.tsv"
         output:

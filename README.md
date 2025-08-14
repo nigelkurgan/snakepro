@@ -123,10 +123,15 @@ This will perform quantification, generate QC plots, and output a full PDF repor
 You can also run specific steps:
 
 ```bash
-bash run_slurm.sh convert_all            # Data conversion only
-bash run_slurm.sh A_all                  # Full quantification (DIANN or Spectronaut)
-bash run_slurm.sh summarize_qc           # QC reports only
+bash run_slurm.sh convert_all           # Data conversion only
+bash run_slurm.sh diann_all             # Full quantification for DIANN
+bash run_slurm.sh spectronaut_all       # Full quantification for Spectronaut
+bash run_slurm.sh summarize_qc          # QC reports only
 ```
+In the `config/config.yml` file, there is an argument for "workflow" or "cohort" or "all". This tells the pipeline on whether or not you have some grouping variables where you want to split your searches based on (e.g., workflow could = different tissues from the same individual and cohort could indicate different hospital/collection date)
+
+Specifying this enabless the {tool}_all to run the specified request. 
+i.e., if you run workflow
 
 ### Post-Quality Control Actions
 
