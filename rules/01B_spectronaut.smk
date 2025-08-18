@@ -144,10 +144,7 @@ rule spectronaut_analysis_cohorts:
     output:
         report = f"{config['project_root']}data_output/{{workflow}}_{{cohort}}/{{workflow}}_{{cohort}}_Spectronaut_Report.tsv"
     log:
-        lambda wc: f"{config['project_root']}logs/step6/spectronaut_analysis_cohorts_{wc.workflow}_{wc.cohort}.log"
-    threads: 16
-    resources:
-        mem_mb = 262144
+        f"{config['project_root']}logs/step6/spectronaut_analysis_cohorts_{{workflow}}_{{cohort}}.log"
     shell:
         f"""
         mkdir -p {config['project_root']}data_output/{{wildcards.workflow}}_{{wildcards.cohort}}
@@ -171,7 +168,7 @@ rule spectronaut_analysis_all:
     input:
         spectra_dir = f"{config['project_root']}data_input/converted_files/"
     output:
-        report = f"{config['project_root']}data_output/ALL/ALL_Spectronaut_Report.tsv"
+        report = f"{config['project_root']}data_output/ALL/"
     log:
         f"{config['project_root']}logs/step6/spectronaut_analysis_all.log"
     threads: 112
@@ -192,6 +189,7 @@ rule spectronaut_analysis_all:
           {report_schema_flag()} &>> {{log}}
         spectronaut -deactivate
         """
+
 # ---------------------------------------------------------------------
 # 7. Final marker — based on run_mode in config
 # ---------------------------------------------------------------------
@@ -206,7 +204,7 @@ if RUN_MODE == "cohort":
                 cohort=COHORTS
             )
         output:
-            marker = f"{config['project_root']}data_output/S_all_spectronaut_complete.marker"
+            marker = "data_output/S_all_spectronaut_complete.marker"
         log:
             f"{config['project_root']}logs/step7/S_all_cohort.log"
         shell:
@@ -220,7 +218,7 @@ elif RUN_MODE == "workflow":
                 workflow=WORKFLOWS
             )
         output:
-            marker = f"{config['project_root']}data_output/S_all_spectronaut_complete.marker"
+            marker = "data_output/S_all_spectronaut_complete.marker"
         log:
             f"{config['project_root']}logs/step7/S_all_workflow.log"
         shell:
@@ -229,9 +227,9 @@ elif RUN_MODE == "workflow":
 elif RUN_MODE == "all":
     rule S_all:
         input:
-            f"{config['project_root']}data_output/ALL/ALL_Spectronaut_Report.tsv"
+            f"{config['project_root']}data_output/ALL/"
         output:
-            marker = f"{config['project_root']}data_output/S_all_spectronaut_complete.marker"
+            marker = "data_output/S_all_spectronaut_complete.marker"
         log:
             f"{config['project_root']}logs/step7/S_all_all.log"
         shell:

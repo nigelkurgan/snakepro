@@ -1,0 +1,11 @@
+Building DAG of jobs...
+WorkflowError:
+MissingInputException: Missing input files for rule spectronaut_analysis_all:
+    output: /maps/projects/cbmr_fpm_soup-AUDIT/data/snakepro/data_output/ALL/ALL_Spectronaut_Report.tsv
+    affected files:
+        /maps/projects/cbmr_fpm_soup-AUDIT/data/snakepro/data_input/converted_files
+MissingInputException: Missing input files for rule spectronaut_analysis_workflows:
+    output: /maps/projects/cbmr_fpm_soup-AUDIT/data/snakepro/data_output/ALL/ALL_Spectronaut_Report.tsv
+    wildcards: workflow=ALL
+    affected files:
+        /maps/projects/cbmr_fpm_soup-AUDIT/data/snakepro/data_input/converted_files/ALL
