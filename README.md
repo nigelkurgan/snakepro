@@ -97,8 +97,11 @@ batch_effect_column: "plate"
    - Metadata file: `ms_raw_files.csv` (must include columns: `file_name`, `workflow`, `cohort`)
    - FASTA file: e.g., `uniprot_reference.fa`
 
+If you have no specific Fasta file and want the most recent release, the pipeline will automatically pull the most recent fasta from uniprot. 
+
 3. **(Optional) Contamination panel**  
    If using contamination analysis, place the panel file in `data_input/`.
+   We have one here specific to plasma that you are free to use/modify. 
 
 ---
 
@@ -116,7 +119,7 @@ To run the full workflow and generate a QC report:
 bash run_slurm.sh all
 ```
 
-This will perform quantification, generate QC plots, and output a full PDF report.
+This will perform quantification, generate QC plots, and output a full PDF report. 
 
 ### Running Individual Pipeline Steps
 
@@ -128,7 +131,7 @@ bash run_slurm.sh diann_all             # Full quantification for DIANN
 bash run_slurm.sh spectronaut_all       # Full quantification for Spectronaut
 bash run_slurm.sh summarize_qc          # QC reports only
 ```
-In the `config/config.yml` file, there is an argument for "workflow" or "cohort" or "all". This tells the pipeline on whether or not you have some grouping variables where you want to split your searches based on (e.g., workflow could = different tissues from the same individual and cohort could indicate different hospital/collection date)
+In the `config/config.yml` file, there is an argument for "workflow" or "cohort" or "all". This tells the pipeline on whether or not you have some grouping variables where you want to split your searches based on (e.g., workflow could = different tissues from the same individual and cohort could indicate different hospitals/collection dates)
 
 Specifying this enabless the {tool}_all to run the specified request. 
 i.e., if you run workflow
@@ -177,7 +180,7 @@ The pipeline is **modular** and adapts to your configuration:
 
 The pipeline generates:
 - **Quantification results** (per run mode and tool)
-- **Quality Control visualizations** (PNG)
+- **Quality Control visualizations** 
 - **Comprehensive individual PDF report**
 - **Summary PDF report**
 

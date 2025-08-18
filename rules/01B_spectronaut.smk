@@ -79,12 +79,12 @@ rule convert_raw_to_htrms:
         f"""
         mkdir -p $(dirname {{output.htrms}})
         mkdir -p $(dirname {{log}})
+        module load singularity
         module load spectronaut/20.0.250602.92449
         spectronaut -activate {ACTIVATION_KEY}
         spectronaut convert \
           -i {{input.raw}} \
           -o {{output.htrms}} \
-          -nogui \
           &>> {{log}}
         spectronaut -deactivate
         """

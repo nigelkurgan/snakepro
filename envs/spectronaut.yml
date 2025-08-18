@@ -3,8 +3,6 @@ name: proteomics-spectronaut
 channels:
   - bioconda
   - conda-forge
-  - defaults
-
 dependencies:
   - python=3.9
   - spectronaut=20.0.250602.92449   # Spectronaut CLI
