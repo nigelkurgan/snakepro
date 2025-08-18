@@ -35,7 +35,7 @@ SAMPLES   = sorted(metadata["file_base"].unique())
 # ---------------------------------------------------------------------
 # 1. Fetch FASTA file: defined in 00_fetch_fasta.smk
 # ---------------------------------------------------------------------
-FASTA = Path(FASTA_OUT)
+FASTA = Path(FASTA)
 
 # ---------------------------------------------------------------------
 # 2. Generate predicted spectral library

@@ -1,23 +1,23 @@
 # ---------------------------------------------------------------------
 # 0. Main options
 # ---------------------------------------------------------------------
-quant_tool: diann           # choose between "diann" or "spectronaut"
+quant_tool: spectronaut           # choose between "diann" or "spectronaut"
 spectronaut_activation_key: YOUR_KEY_HERE # Spectronaut activation key
 spectronaut_direct_schema: "BGS Factory Settings"  # or path to .prop file if custom schema
 spectronaut_report_schema: "BGS Factory Settings"  # or path to .prop file if custom schema
-run_qc: true                # whether to run QC rules
+run_qc: false                # whether to run QC rules
 batch_correction: false     # only set up for diann right now
 run_mode: all            # options: cohort, workflow, all; default = all if blank
 
 # ---------------------------------------------------------------------
 # 1. Paths & metadata
 # ---------------------------------------------------------------------
-project_root: "/path/to/pipeline/"            # absolute or relative
+project_root: "/maps/projects/cbmr_fpm_soup-AUDIT/data/snakepro/"            # absolute or relative
 metadata: "data_input/ms_raw_files.csv"       # metadata mapping raw files
 project_name: "My_Project"                   # name of the project
 
 # If you already have a fasta, provide its path (absolute or relative), e.g.:
-# fasta: "data_input/custom/human_swissprot_2025_07.fasta"
+# fasta: "data_input/human_swissprot_2025_07.fasta"
 # Otherwise, set to the sentinel value below to fetch from UniProt:
 fasta: "fetch_fasta"
 
@@ -41,8 +41,8 @@ pca_factors:
   - "plate"
   - "condition"
   - "time" # add more if you have in your metadata file or change to fit your needs
-contamination_panel: true
-contamination_panel_file: "data_input/contamination_panel.xlsx"
+contamination_panel: false
+contamination_panel_file: "data_input/contamination_panel.xlsx" # plasma specific contamination panel is already included
 exclude_samples: []        # list of sample names to remove, e.g. ["s001", "s010"]
 
 # adjust batch effect column here: ensure this is in metadata file 

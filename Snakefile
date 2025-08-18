@@ -4,11 +4,7 @@
 
 configfile: "config/config.yml"
 
-workdir: config["project_root"]
-
-# Pull key options from config
-TOOL   = config["quant_tool"].lower()
-RUN_QC = config.get("run_qc", True)
+#workdir: config["project_root"]
 
 # ---------------------------------------------------------------------
 # Always include FASTA module (it defines FASTA for both modes)
@@ -17,6 +13,10 @@ RUN_QC = config.get("run_qc", True)
 # Downstream rules can just use: input: fasta=FASTA
 # ---------------------------------------------------------------------
 include: "rules/00_fetch_fasta.smk"
+
+# Pull key options from config
+TOOL   = config["quant_tool"].lower()
+RUN_QC = config.get("run_qc", True)
 
 # Read workflows and cohorts from config, or else infer from metadata
 WORKFLOWS = config.get("workflows", None)

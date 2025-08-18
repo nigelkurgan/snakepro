@@ -36,7 +36,7 @@ if not ACTIVATION_KEY:
 # ---------------------------------------------------------------------
 # 1. Fetch FASTA file: defined in 00_fetch_fasta.smk
 # ---------------------------------------------------------------------
-FASTA = Path(FASTA_OUT)
+FASTA = Path(FASTA)
 
 # ---------------------------------------------------------------------
 # CLI flag helpers
@@ -50,14 +50,13 @@ def report_schema_flag():
 def fasta_flag():
     return f"-fasta {FASTA}"
 
-
 # ---------------------------------------------------------------------
 # 2. Convert raw files → htrms (Spectronaut format)
 # ---------------------------------------------------------------------
 rule convert_raw_to_htrms:
     input:
-        raw=lambda wc: (
-            f"{config['project_root']}data_input/raw_files/" +
+        raw=lambda wc: str(
+            Path(config['project_root']) / "data_input" / "raw_files" /
             metadata.loc[
                 (metadata.file_base == wc.sample) &
                 (metadata.workflow == wc.workflow) &
@@ -66,15 +65,12 @@ rule convert_raw_to_htrms:
             ].iloc[0]
         )
     output:
-        htrms = (
-            f"{config['project_root']}data_input/converted_files/" +
-            "{workflow}/{cohort}/{sample}.htrms"
+        htrms=(
+            f"{config['project_root']}data_input/converted_files/"
+            + "{workflow}/{cohort}/{sample}.htrms"
         )
-    threads: 16
-    resources:
-        mem_mb = 64000
     log:
-        lambda wc: f"{config['project_root']}logs/step3/convert_raw_to_htrms_{wc.workflow}_{wc.cohort}_{wc.sample}.log"
+        f"{config['project_root']}logs/step3/convert_raw_to_htrms_{{workflow}}_{{cohort}}_{{sample}}.log"
     shell:
         f"""
         mkdir -p $(dirname {{output.htrms}})
@@ -88,6 +84,7 @@ rule convert_raw_to_htrms:
           &>> {{log}}
         spectronaut -deactivate
         """
+
 
 # ---------------------------------------------------------------------
 # 3. Marker rule — ensure all conversion is complete
@@ -118,11 +115,8 @@ rule spectronaut_analysis_workflows:
         spectra_dir = lambda wc: f"{config['project_root']}data_input/converted_files/{wc.workflow}"
     output:
         report = f"{config['project_root']}data_output/{{workflow}}/{{workflow}}_Spectronaut_Report.tsv"
-    threads: 56
-    resources:
-        mem_mb = 524288
     log:
-        lambda wc: f"{config['project_root']}logs/step5/spectronaut_analysis_workflows_{wc.workflow}.log"
+        f"{config['project_root']}logs/step5/spectronaut_analysis_workflows_{{workflow}}.log"
     shell:
         f"""
         mkdir -p {config['project_root']}data_output/{{wildcards.workflow}}
