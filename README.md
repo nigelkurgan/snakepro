@@ -45,12 +45,24 @@ Edit the **config/config.yml** file with the appropriate paths and options.
 quant_tool: diann          # "diann" or "spectronaut"
 run_mode: cohort           # "cohort", "workflow", or "all"
 run_qc: true               # enable QC report generation
-sn_batch_correct: false    # Spectronaut-specific flag
 
 # Paths
 project_root: '/path/to/pipeline/'
 metadata: 'data_input/ms_raw_files.csv'
-fasta_file: 'data_input/uniprot_reference.fa'
+fasta: 'data_input/uniprot_reference.fa'   # or "fetch_fasta" to auto-download from UniProt
+
+# FASTA fetch options (only used if fasta: fetch_fasta)
+fasta_out_dir: 'data_input'
+organism_id: 9606
+include_isoforms: false
+reviewed: true
+exclude_fragments: true
+filename_prefix: 'uniprot'
+
+# Spectronaut options
+spectronaut_activation_key: YOUR_KEY_HERE
+spectronaut_direct_schema: "/spectronaut_schemas/bgs_factory_settings.prop"
+spectronaut_report_schema: "/spectronaut_schemas/detailed_protein_quant.rs"
 
 # QC settings
 filtering_option: all       # "all" or "group"
@@ -66,27 +78,50 @@ batch_effect_column: "plate"
 ```
 
 **Key parameters:**
-- `quant_tool`: Choose `"diann"` or `"spectronaut"` for quantification.
-- `run_mode`: Controls how quantification is performed:
-    - `"cohort"`: Per workflow and cohort (default).
-    - `"workflow"`: Per workflow (all cohorts pooled).
-    - `"all"`: All samples pooled together.
+- `quant_tool`: `"diann"` or `"spectronaut"` for quantification.
+- `run_mode`: `"cohort"` (default), `"workflow"`, or `"all"` for pooling strategy.
 - `run_qc`: If `true`, generates QC reports.
+- `fasta`: Path to FASTA file, or `"fetch_fasta"` to auto-download from UniProt.
 - `exclude_samples`: List of samples to exclude from analysis.
 - `batch_correction`: Enable/disable batch correction.
+
+---
+
+## Schema files 
+
+1. **Input and report schema files**
+   Example schemas are provided in:
+   ```
+   /spectronaut_schemas/
+   ```
+   **Input schemas:**
+   - `bgs_factory_settings.prop` = direct DIA 
+   - `default_phospho_spectronaut.prop` = STY phospho search
+
+   **Report schemas:**
+   - `protein_quant.rs`
+   - `peptide_quant.rs`
+   - `detailed_protein_quant.rs` # additional info to protein.groups
+   - `default_phospho_report.rs`       
+
+   Example config usage:
+   ```yaml
+   spectronaut_direct_schema: "/spectronaut_schemas/bgs_factory_settings.prop"
+   spectronaut_report_schema: "/spectronaut_schemas/detailed_protein_quant.rs"
+   ```
 
 ---
 
 ## Input Data Preparation
 
 1. **Raw data files**  
-   Place your raw files (e.g., Thermo `.raw`, Bruker `.d` folders) in:
+   Place your raw files (e.g., Thermo `.raw`, Bruker `.d`, or SCIEX `.wiff`) in:
    ```
    data_input/raw_files/
    ```
    Example upload command:
    ```bash
-   scp -r {directory}/raw_files user@server:/path/to/pipeline/data_input/raw_files/
+   rsync -av --progress=summary --bwlimit=50M /from_home_directory/raw_files/ /raw_files/ # assuming you're in the cloned repo
    ```
 
 2. **FASTA file and metadata**  
@@ -97,7 +132,7 @@ batch_effect_column: "plate"
    - Metadata file: `ms_raw_files.csv` (must include columns: `file_name`, `workflow`, `cohort`)
    - FASTA file: e.g., `uniprot_reference.fa`
 
-If you have no specific Fasta file and want the most recent release, the pipeline will automatically pull the most recent fasta from uniprot. 
+   If you set `fasta: fetch_fasta` in your config, the pipeline will automatically download the latest UniProt FASTA matching your organism and options.
 
 3. **(Optional) Contamination panel**  
    If using contamination analysis, place the panel file in `data_input/`.
@@ -127,14 +162,13 @@ You can also run specific steps:
 
 ```bash
 bash run_slurm.sh convert_all           # Data conversion only
-bash run_slurm.sh diann_all             # Full quantification for DIANN
+bash run_slurm.sh diann_all             # Full quantification for DIA-NN
 bash run_slurm.sh spectronaut_all       # Full quantification for Spectronaut
 bash run_slurm.sh summarize_qc          # QC reports only
 ```
-In the `config/config.yml` file, there is an argument for "workflow" or "cohort" or "all". This tells the pipeline on whether or not you have some grouping variables where you want to split your searches based on (e.g., workflow could = different tissues from the same individual and cohort could indicate different hospitals/collection dates)
+In the `config/config.yml` file, the `run_mode` argument ("workflow", "cohort", or "all") controls how the pipeline splits your searches (e.g., by tissue, hospital, or pooled).
 
-Specifying this enabless the {tool}_all to run the specified request. 
-i.e., if you run workflow
+---
 
 ### Post-Quality Control Actions
 
@@ -164,6 +198,10 @@ The pipeline is **modular** and adapts to your configuration:
   - `"cohort"`: Quantifies each workflow/cohort combination separately.
   - `"workflow"`: Quantifies all cohorts pooled per workflow.
   - `"all"`: Quantifies all samples pooled together.
+
+- **Automatic FASTA handling:**  
+  - If `fasta` is a path, that file is used.
+  - If `fasta: fetch_fasta`, the pipeline downloads the latest UniProt FASTA for your organism.
 
 - **Automatic file handling:**  
   - Raw file types (e.g., `.raw`, `.d`) are inferred from your metadata.
@@ -261,7 +299,7 @@ scp -r user@server:/path/to/pipeline/data_output/ ~/local_directory/
   Ensure your `ms_raw_files.csv` contains at least `file_name`, `workflow`, and `cohort`.
 
 - **No FASTA file found:**  
-  Place a single FASTA file in `data_input/`.
+  Place a single FASTA file in `data_input/`, or set `fasta: fetch_fasta` in your config.
 
 - **Pipeline fails on log file creation:**  
   All rules create log directories as needed; if you see errors, check directory permissions.
